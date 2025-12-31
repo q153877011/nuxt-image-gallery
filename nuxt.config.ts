@@ -1,6 +1,5 @@
 export default defineNuxtConfig({
   modules: [
-    '@nuxthub/core',
     '@nuxt/fonts',
     '@nuxt/ui',
     '@nuxt/eslint',
@@ -37,10 +36,6 @@ export default defineNuxtConfig({
 
   compatibilityDate: '2024-07-30',
 
-  hub: {
-    blob: true
-  },
-
   eslint: {
     config: {
       stylistic: {
@@ -52,5 +47,8 @@ export default defineNuxtConfig({
 
   seo: {
     redirectToCanonicalSiteUrl: true
+  },
+  nitro: {
+    preset: 'vercel'
   }
 })
