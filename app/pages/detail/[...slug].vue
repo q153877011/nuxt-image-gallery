@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import type { BlobObject } from '@nuxthub/core'
+import type { ImageItem } from '../../config/images'
 
 const route = useRoute()
 const { images } = useFile()
 
-// Get the current image based on the slug
+// Get the current image based on the slug (id)
 const image = computed(() => {
   if (!images.value) return null
-  return images.value.find((file: BlobObject) => file.pathname.split('.')[0] === route.params.slug![0])
+  const imageId = String(route.params.slug![0])
+  return images.value.find((img: ImageItem) => String(img.id) === imageId)
 })
 
 // SEO Meta tags for individual images
 watchEffect(() => {
-  if (image.value && image.value.pathname) {
-    const imageName = (image.value?.pathname ?? '').split('.')[0].replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
-    const imageUrl = `https://image-gallery.nuxt.dev/images/${image.value.pathname}`
+  if (image.value && image.value.url) {
+    const imageName = `Image ${image.value.id}`
+    const imageUrl = image.value.url
 
     useSeoMeta({
       title: `${imageName} - Nuxt Image Gallery`,

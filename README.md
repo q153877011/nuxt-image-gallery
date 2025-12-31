@@ -37,6 +37,7 @@ https://github.com/Flosciante/nuxt-image-gallery/assets/904724/6e2bafdf-f5a0-42c
 
 - `NUXT_ADMIN_PASSWORD` - A password to access the admin panel and upload images, will default to `admin` if not provided.
 - `NUXT_SESSION_PASSWORD` - A secret key for session encryption used by [nuxt-auth-utils](https://github.com/Atinux/nuxt-auth-utils), will be generated automatically if not provided in development mode.
+- `NUXT_GATE_PASSWORD` - Password for gate verification page. Users need to enter this password to access the site. Will default to `gate123` if not provided (development only, must be set in production).
 
 ## Development
 

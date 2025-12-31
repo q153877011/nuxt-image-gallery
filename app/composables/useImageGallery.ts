@@ -1,12 +1,9 @@
 import type { UseSwipeDirection } from '@vueuse/core'
-import type { BlobObject } from '@nuxthub/core'
 import type { FilePlugin } from '../../types'
 import { encodeImageSlug, decodeImageSlug, isImageMatch } from '../utils/url.ts'
 
 export function useImageGallery () {
   const nuxtApp = useNuxtApp()
-  const config = useRuntimeConfig()
-  const imageToDownload = ref<HTMLImageElement>()
   const router = useRouter()
   const route = useRoute()
 
@@ -17,8 +14,8 @@ export function useImageGallery () {
       return -1
     }
 
-    const decodedSlug = decodeImageSlug(route.params.slug[0])
-    return file.images.value.findIndex((image: BlobObject) => image.pathname.split('.')[0] === decodedSlug)
+    const imageId = String(route.params.slug[0])
+    return file.images.value.findIndex((image) => String(image.id) === imageId)
   })
 
   const isFirstImg: ComputedRef<boolean> = computed(() => {
@@ -26,8 +23,9 @@ export function useImageGallery () {
       return false
     }
 
+    const imageId = String(route.params.slug[0])
     return file.images.value[0] !== undefined
-      ? isImageMatch(file.images.value[0].pathname, route.params.slug[0])
+      ? isImageMatch(String(file.images.value[0].id), imageId)
       : false
   })
 
@@ -36,8 +34,9 @@ export function useImageGallery () {
       return false
     }
 
+    const imageId = String(route.params.slug[0])
     const lastImage = file.images.value[file.images.value.length - 1]
-    return lastImage ? isImageMatch(lastImage.pathname, route.params.slug[0]) : false
+    return lastImage ? isImageMatch(String(lastImage.id), imageId) : false
   })
 
   const navigateToImage = (index: number) => {
@@ -45,7 +44,7 @@ export function useImageGallery () {
       return
     }
 
-    const encodedSlug = encodeImageSlug(file.images.value[index]!.pathname)
+    const encodedSlug = encodeImageSlug(file.images.value[index]!.id)
     router.push(`/detail/${encodedSlug}`)
   }
 
@@ -89,81 +88,68 @@ export function useImageGallery () {
     context!.drawImage(poster!, 0, 0, canvas.width, canvas.height)
 
     const modifiedImage = new Image()
-
     modifiedImage.src = canvas.toDataURL('image/png')
-    imageToDownload.value = modifiedImage
 
-    return imageToDownload as Ref<HTMLImageElement>
+    return ref(modifiedImage) as Ref<HTMLImageElement>
   }
 
-  const downloadImage = async (filename: string, poster: HTMLImageElement, contrast: number, blur: number, invert: number, saturate: number, hueRotate: number, sepia: number) => {
-    await applyFilters(poster, contrast, blur, invert, saturate, hueRotate, sepia)
+  const downloadImage = async (imageUrl: string, poster: HTMLImageElement, contrast: number, blur: number, invert: number, saturate: number, hueRotate: number, sepia: number) => {
+    const modifiedImage = await applyFilters(poster, contrast, blur, invert, saturate, hueRotate, sepia)
 
-    if (!imageToDownload.value) {
+    if (!modifiedImage.value) {
       return
     }
 
-    await useFetch(imageToDownload.value.src, {
-      baseURL: `${config.public.imageApi}/ipx/_/tmdb/`
-    }).then((response) => {
-      const blob = response.data.value as Blob
-      const url: string = URL.createObjectURL(blob)
-      const link: HTMLAnchorElement = document.createElement('a')
-
-      link.setAttribute('href', url)
-      link.setAttribute('download', filename)
-      link.click()
-    })
-  }
-
-  const convertBase64ToFile = async (image: Ref<HTMLImageElement>, originalImage: Ref<BlobObject>) => {
-    const url = image.value.currentSrc
-
-    const response = await fetch(url)
-    const blob = await response.blob()
-
-    const convertedFile = new File([blob], `${Math.random().toString().split('.')[1]}.${originalImage.value?.contentType?.split('/').pop()}`, { type: originalImage.value.contentType })
-
-    return convertedFile as File
+    const link: HTMLAnchorElement = document.createElement('a')
+    link.setAttribute('href', modifiedImage.value.src)
+    link.setAttribute('download', `image-${Date.now()}.png`)
+    link.click()
   }
 
   const magnifierImage = (e: MouseEvent, containerEl: HTMLElement, imageEl: HTMLImageElement, magnifierEl: HTMLElement, zoomFactor: number = 2) => {
-    if (magnifierEl.style.filter !== imageEl.style.filter)
-      magnifierEl.style.filter = imageEl.style.filter
+    // 只在客户端执行
+    if (typeof window === 'undefined') return
 
-    const imageRect = imageEl.getBoundingClientRect()
-    const containerRect = containerEl.getBoundingClientRect()
+    try {
+      if (magnifierEl.style.filter !== imageEl.style.filter)
+        magnifierEl.style.filter = imageEl.style.filter
 
-    const x = e.pageX - containerRect.left
-    const y = e.pageY - containerRect.top
+      const imageRect = imageEl.getBoundingClientRect()
+      const containerRect = containerEl.getBoundingClientRect()
 
-    const imgWidth = imageRect.width
-    const imgHeight = imageRect.height
+      const x = e.pageX - containerRect.left
+      const y = e.pageY - containerRect.top
 
-    const zoomedWidth = imgWidth * (zoomFactor === 1 ? 1.5 : zoomFactor)
-    const zoomedHeight = imgHeight * (zoomFactor === 1 ? 1.5 : zoomFactor)
+      const imgWidth = imageRect.width
+      const imgHeight = imageRect.height
 
-    let xperc = (x / imgWidth) * 100
-    let yperc = (y / imgHeight) * 100
+      const zoomedWidth = imgWidth * (zoomFactor === 1 ? 1.5 : zoomFactor)
+      const zoomedHeight = imgHeight * (zoomFactor === 1 ? 1.5 : zoomFactor)
 
-    if (x > 0.01 * imgWidth)
-      xperc += 0.15 * xperc
+      let xperc = (x / imgWidth) * 100
+      let yperc = (y / imgHeight) * 100
 
-    if (y >= 0.01 * imgHeight)
-      yperc += 0.15 * yperc
+      if (x > 0.01 * imgWidth)
+        xperc += 0.15 * xperc
 
-    magnifierEl.style.backgroundSize = `${zoomedWidth}px ${zoomedHeight}px`
-    magnifierEl.style.backgroundPositionX = `${xperc - 9}%`
-    magnifierEl.style.backgroundPositionY = `${yperc - 9}%`
-    magnifierEl.style.left = `${x - 50}px`
-    magnifierEl.style.top = `${y - 50}px`
-    magnifierEl.style.zIndex = '9999'
+      if (y >= 0.01 * imgHeight)
+        yperc += 0.15 * yperc
+
+      magnifierEl.style.backgroundSize = `${zoomedWidth}px ${zoomedHeight}px`
+      magnifierEl.style.backgroundPositionX = `${xperc - 9}%`
+      magnifierEl.style.backgroundPositionY = `${yperc - 9}%`
+      magnifierEl.style.left = `${x - 50}px`
+      magnifierEl.style.top = `${y - 50}px`
+      magnifierEl.style.zIndex = '9999'
+    }
+    catch (err) {
+      // 忽略 SSR 中的错误
+    }
   }
 
   return {
     downloadImage,
     applyFilters,
-    convertBase64ToFile,
     magnifierImage,
     initSwipe,
     currentIndex,

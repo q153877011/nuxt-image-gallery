@@ -1,65 +1,12 @@
 <script setup lang="ts">
-const isOpen = ref(false)
-
-const dropZoneRef = ref<HTMLElement>()
-const fileInput = ref<HTMLInputElement>()
 const mansoryItem = ref<Array<HTMLElement>>([])
-const deletingImg = ref('')
-const uploadingImg = ref(false)
-const disconnect = ref(false)
-
-const toast = useToast()
-const { uploadImage, deleteImage, images } = useFile()
-const { loggedIn, clear } = useUserSession()
-
+const { images } = useFile()
 const active = useState()
-
-const { isOverDropZone } = useDropZone(dropZoneRef, onDrop)
-
-function openFilePicker () {
-  fileInput.value?.click()
-}
-
-async function fileSelection (event: Event) {
-  const target = event.target as HTMLInputElement
-
-  if (target.files?.[0]) {
-    await uploadFile(target.files[0])
-  }
-}
-
-async function onDrop (files: File[] | null) {
-  if (files) {
-    await uploadFile(files[0] as File)
-  }
-}
-
-async function uploadFile (file: File) {
-  uploadingImg.value = true
-
-  await uploadImage(file)
-    .catch(() => toast.add({ title: 'An error occured', description: 'Please try again', color: 'red' }))
-    .finally(() => uploadingImg.value = false)
-}
-
-async function deleteFile (pathname: string) {
-  deletingImg.value = pathname
-
-  await deleteImage(pathname)
-    .catch(() => toast.add({ title: 'An error occured', description: 'Please try again', color: 'red' }))
-    .finally(() => deletingImg.value = '')
-}
-
-async function clearSession () {
-  disconnect.value = true
-
-  await clear().finally(() => disconnect.value = false)
-}
 </script>
 
 <template>
   <div>
-    <section v-if="images" ref="dropZoneRef" class="relative h-screen gap-[22px] p-4">
+    <section v-if="images" class="relative h-screen gap-[22px] p-4">
       <BottomMenu class="bottom-menu">
         <template #logo>
           <img src="/logo.svg" width="29" height="20">
@@ -76,52 +23,30 @@ async function clearSession () {
         </template>
         <template #buttons>
           <div class="flex gap-x-2">
-            <UButton v-if="loggedIn" :loading="disconnect" icon="i-heroicons-power-20-solid" color="red" variant="ghost"
-              @click="clearSession" />
-            <UModal v-model:open="isOpen" title="Login to upload images" :close="{
-              color: 'gray',
-              variant: 'outline',
-              class: 'rounded-full'
-            }">
-              <UButton v-if="!loggedIn" label="Sign in" color="primary" variant="ghost" aria-label="Sign in"
-                class="mr-4 sm:mr-0" />
-              <template #body>
-                <LoginForm @close="isOpen = false" />
-              </template>
-            </UModal>
+            <!-- 按钮区域保留，但移除登录相关功能 -->
           </div>
         </template>
       </BottomMenu>
 
       <div class="w-full" :class="{ 'masonry-container': images && images.length }">
-        <div v-if="loggedIn">
-          <input ref="fileInput" class="hidden" type="file" accept="image/*" @change="fileSelection">
-          <UploadButton :uploading="uploadingImg" type="submit" class="mb-6" :is-over-drop-zone="isOverDropZone"
-            @click="openFilePicker" />
-        </div>
+        <ul v-if="images && images.length" class="grid grid-cols-1 gap-4 lg:block">
+          <li v-for="image in images" ref="mansoryItem" :key="image.id"
+            class="relative w-full group masonry-item">
+            <NuxtLink :to="`/detail/${image.id}`" @click="active = image.id">
+              <img v-if="image" width="527" height="430" :src="image.url"
+                :class="{ imageEl: image.id === active }"
+                class="h-auto w-full max-h-[430px] rounded-md transition-all duration-200 border-image brightness-[.8] hover:brightness-100 will-change-[filter] object-cover">
+            </NuxtLink>
+          </li>
+        </ul>
         <div v-else class="text-2xl text-white flex flex-col gap-y-4 items-center justify-center h-full w-full pb-8">
           <h1 class="font-medium text-5xl">
             Welcome to image gallery
           </h1>
           <p class="text-gray-400">
-            You must be logged in to start uploading images
+            No images available
           </p>
         </div>
-
-        <ul v-if="images && images.length" class="grid grid-cols-1 gap-4 lg:block">
-          <li v-for="image in images" ref="mansoryItem" :key="image.pathname"
-            class="relative w-full group masonry-item">
-            <UButton v-if="loggedIn" :loading="deletingImg === image.pathname" color="white"
-              icon="i-heroicons-trash-20-solid"
-              class="absolute top-4 right-4 z-[9999] opacity-0 group-hover:opacity-100"
-              @click="deleteFile(image.pathname)" />
-            <NuxtLink :to="`/detail/${image.pathname.split('.')[0]}`" @click="active = image.pathname.split('.')[0]">
-              <img v-if="image" width="527" height="430" :src="`/images/${image.pathname}`"
-                :class="{ imageEl: image.pathname.split('.')[0] === active }"
-                class="h-auto w-full max-h-[430px] rounded-md transition-all duration-200 border-image brightness-[.8] hover:brightness-100 will-change-[filter] object-cover">
-            </NuxtLink>
-          </li>
-        </ul>
       </div>
     </section>
     <div v-else class="flex items-center space-x-4 z-10">

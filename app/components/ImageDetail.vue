@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { BlobObject } from '@nuxthub/core'
 import { decodeImageSlug } from '../utils/url.ts'
+import type { ImageItem } from '../config/images'
 
 const bottomMenu = ref<HTMLElement>()
 const imageEl = ref<HTMLImageElement>()
 const magnifierEl = ref<HTMLElement>()
 const imageContainer = ref<HTMLElement>()
-const savingImg = ref(false)
 
 // filter
 const filter = ref(false)
@@ -22,30 +21,58 @@ const objectsFit = ref(['Contain', 'Cover', 'Scale-down', 'Fill', 'None'])
 const objectFitSelected = ref(objectsFit.value[0])
 const filterUpdated = ref(false)
 
-const { images, uploadImage } = useFile()
-const { loggedIn } = useUserSession()
+const { images } = useFile()
 
 const isSmallScreen = useMediaQuery('(max-width: 1024px)')
-const { currentIndex, isFirstImg, isLastImg, downloadImage, applyFilters, initSwipe, convertBase64ToFile, magnifierImage } = useImageGallery()
+const { currentIndex, isFirstImg, isLastImg, downloadImage, applyFilters, initSwipe, magnifierImage } = useImageGallery()
 
 const active = useState()
 const route = useRoute()
 const router = useRouter()
 
-const image: ComputedRef<BlobObject> = computed(() => {
-  if (!route.params.slug || !route.params.slug[0] || !images.value) {
-    return {} as BlobObject
+const image: ComputedRef<ImageItem | null> = computed(() => {
+  if (!route.params.slug || !route.params.slug[0]) {
+    return null
   }
 
-  const decodedSlug = decodeImageSlug(route.params.slug[0])
-  const foundImage = images.value.find((file: BlobObject) => file.pathname.split('.')[0] === decodedSlug)
+  if (!images.value || images.value.length === 0) {
+    return null
+  }
+
+  // 根据 id 查找图片
+  const imageId = String(route.params.slug[0])
+  const foundImage = images.value.find((img: ImageItem) => String(img.id) === imageId)
 
   if (!foundImage) {
-    console.warn(`Image not found for slug: ${decodedSlug}`)
-    return {} as BlobObject
+    console.warn(`Image not found for id: ${imageId}`)
+    return null
   }
 
   return foundImage
+})
+
+// 计算图片样式（避免 SSR 问题）
+const imageStyle = computed(() => {
+  if (!image.value) return {}
+  const fit = (objectFitSelected.value ?? 'Contain').toLowerCase()
+  return {
+    filter: `contrast(${contrast.value}%) blur(${blur.value}px) invert(${invert.value}%) saturate(${saturate.value}%) hue-rotate(${hueRotate.value}deg) sepia(${sepia.value}%)`,
+    objectFit: fit as any
+  }
+})
+
+// 计算放大镜样式
+const magnifierStyle = computed(() => {
+  if (!image.value) return {}
+  return {
+    backgroundImage: `url('${image.value.url}')`
+  }
+})
+
+// 检查是否是当前图片（用于 view transition）
+const isCurrentImage = computed(() => {
+  if (!route.params.slug?.[0] || !image.value) return false
+  return String(route.params.slug[0]) === String(image.value.id)
 })
 
 onKeyStroke('Escape', () => {
@@ -55,15 +82,23 @@ onKeyStroke('Escape', () => {
 onKeyStroke('ArrowLeft', () => {
   if (isFirstImg.value)
     router.push('/')
-  else
-    router.push(`/detail/${images.value[currentIndex.value - 1]?.pathname.split('.')[0]}`)
+  else {
+    const prevImage = images.value[currentIndex.value - 1]
+    if (prevImage) {
+      router.push(`/detail/${prevImage.id}`)
+    }
+  }
 })
 
 onKeyStroke('ArrowRight', () => {
   if (isLastImg.value)
     router.push('/')
-  else
-    router.push(`/detail/${images.value[currentIndex.value + 1]?.pathname.split('.')[0]}`)
+  else {
+    const nextImage = images.value[currentIndex.value + 1]
+    if (nextImage) {
+      router.push(`/detail/${nextImage.id}`)
+    }
+  }
 })
 
 function resetFilter() {
@@ -80,20 +115,7 @@ function resetFilter() {
 
 function cancelFilter() {
   filter.value = false
-
   resetFilter()
-}
-
-async function saveImage() {
-  if (filterUpdated.value && imageEl.value) {
-    savingImg.value = true
-
-    const modifiedImage = await applyFilters(imageEl.value, contrast.value, blur.value, invert.value, saturate.value, hueRotate.value, sepia.value)
-
-    const imageToUpload = await convertBase64ToFile(modifiedImage, image)
-
-    await uploadImage(imageToUpload, true).finally(() => savingImg.value = false)
-  }
 }
 
 watch([contrast, blur, invert, saturate, hueRotate, sepia], () => {
@@ -106,15 +128,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <div v-if="image">
+  <div v-if="image" class="relative min-h-screen">
     <!-- background -->
-    <div class="absolute inset-0 w-full h-full">
+    <!-- <div class="absolute inset-0 w-full h-full">
       <img
-        :src="`/images/${image.pathname}`"
+        :src="image.url"
         class="object-cover w-full h-full blur-[70px] brightness-[.2] will-change-[filter]"
         alt=""
       >
-    </div>
+    </div> -->
 
     <UContainer class="overflow-x-hidden relative flex items-center justify-center">
       <ImageFilters
@@ -246,7 +268,7 @@ onMounted(() => {
                     color="gray"
                     icon="i-heroicons-arrow-up-right-20-solid"
                     size="md"
-                    :to="`/images/${image.pathname}`"
+                    :href="image.url"
                     target="_blank"
                     aria-label="Open original image"
                   />
@@ -260,7 +282,7 @@ onMounted(() => {
                     size="md"
                     class="hidden md:flex"
                     aria-label="Download original or modified image"
-                    @click="downloadImage(image.pathname, imageEl!, contrast, blur, invert, saturate, hueRotate, sepia)"
+                    @click="imageEl && downloadImage(image.url, imageEl, contrast, blur, invert, saturate, hueRotate, sepia)"
                   />
                 </UTooltip>
               </div>
@@ -269,27 +291,13 @@ onMounted(() => {
                 v-else
                 class="flex gap-x-2 items-center"
               >
-                <UTooltip
-                  v-if="loggedIn"
-                  text="Save filtered image"
-                >
-                  <UButton
-                    :loading="savingImg"
-                    variant="ghost"
-                    color="gray"
-                    icon="i-heroicons-check-20-solid"
-                    class="hidden md:flex"
-                    aria-label="Upload original or modified image to gallery"
-                    @click="saveImage()"
-                  />
-                </UTooltip>
                 <UTooltip text="Cancel filters">
                   <UButton
                     variant="ghost"
                     color="gray"
                     icon="i-heroicons-x-mark"
                     class="hidden md:flex"
-                    aria-label="Upload original or modified image to gallery"
+                    aria-label="Cancel filters"
                     @click="cancelFilter()"
                   />
                 </UTooltip>
@@ -312,12 +320,12 @@ onMounted(() => {
               <UButton
                 variant="ghost"
                 color="gray"
-                :to="images && images[currentIndex - 1] ? `/detail/${images[currentIndex - 1]?.pathname.split('.')[0]}` : '/'"
+                    :to="(() => { const prev = images?.[currentIndex - 1]; return prev?.id ? `/detail/${prev.id}` : '/'; })()"
                 size="lg"
                 icon="i-heroicons-chevron-left"
                 class="hidden md:flex ml-4"
                 aria-label="Go to previous image"
-                @click="active === image.pathname.split('.')[0]"
+                    @click="active = image.id"
               />
             </UTooltip>
 
@@ -337,7 +345,7 @@ onMounted(() => {
                   variant="ghost"
                   class="back hidden md:flex ml-4 transition-colors duration-200"
                   aria-label="Back to gallery"
-                  @click="active === image.pathname.split('.')[0]"
+                    @click="active = image.id"
                 >
                   <UIcon
                     name="i-heroicons-rectangle-group-20-solid"
@@ -354,19 +362,18 @@ onMounted(() => {
                   <img
                     v-if="image"
                     ref="imageEl"
-                    :src="`/images/${image.pathname}`"
-                    :alt="image.pathname"
+                    :src="image.url"
+                    :alt="image.id"
                     class="rounded object-contain transition-all duration-200 block"
-                    :class="[{ imageEl: route.params.slug?.[0] === image.pathname.split('.')[0] }, filter ? 'w-[80%] ml-[12px]' : 'w-full']"
-                    :style="`filter: contrast(${contrast}%) blur(${blur}px) invert(${invert}%) saturate(${saturate}%) hue-rotate(${hueRotate}deg) sepia(${sepia}%); object-fit:${(objectFitSelected ?? 'Contain').toLowerCase()};`"
-                    crossorigin="anonymous"
-                    @mousemove="magnifier ? magnifierImage($event, imageContainer!, imageEl!, magnifierEl!, zoomFactor) : () => {}"
+                    :class="[{ imageEl: isCurrentImage }, filter ? 'w-[80%] ml-[12px]' : 'w-full']"
+                    :style="imageStyle"
+                    @mousemove="magnifier && imageContainer && imageEl && magnifierEl ? magnifierImage($event, imageContainer, imageEl, magnifierEl, zoomFactor) : () => {}"
                   >
                   <div
                     v-if="magnifier"
                     ref="magnifierEl"
                     class="w-[100px] h-[100px] absolute border border-gray-200 pointer-events-none rounded-full block opacity-0 group-hover:opacity-100 transition-opacity duration-200 "
-                    :style="`background-image: url('/images/${image.pathname}'`"
+                    :style="magnifierStyle"
                   />
                 </div>
               </div>
@@ -381,12 +388,12 @@ onMounted(() => {
               <UButton
                 variant="ghost"
                 color="gray"
-                :to="images && images[currentIndex + 1]?.pathname ? `/detail/${images[currentIndex + 1]?.pathname.split('.')[0]}` : '/'"
+                    :to="(() => { const next = images?.[currentIndex + 1]; return next?.id ? `/detail/${next.id}` : '/'; })()"
                 size="lg"
                 icon="i-heroicons-chevron-right"
                 class="hidden md:flex mr-4 rounded-full"
                 aria-label="Go to next image"
-                @click="active === image.pathname.split('.')[0]"
+                    @click="active = image.id"
               />
             </UTooltip>
 
@@ -404,7 +411,7 @@ onMounted(() => {
                   size="xl"
                   class="back hidden md:flex mr-4 transition-colors duration-200"
                   aria-label="Back to gallery"
-                  @click="active === image.pathname.split('.')[0]"
+                    @click="active = image.id"
                 >
                   <UIcon
                     name="i-heroicons-rectangle-group-20-solid"
@@ -417,6 +424,20 @@ onMounted(() => {
         </div>
       </div>
     </UContainer>
+  </div>
+  <div v-else class="min-h-screen flex items-center justify-center bg-black">
+    <div class="text-center">
+      <div v-if="!images || images.length === 0" class="space-y-4">
+        <USkeleton class="h-12 w-12 bg-white-500 mx-auto" :ui="{ rounded: 'rounded-full' }" />
+        <p class="text-white">加载中...</p>
+      </div>
+      <div v-else class="space-y-4">
+        <p class="text-white text-xl">图片未找到</p>
+        <UButton to="/" color="primary" variant="outline">
+          返回图库
+        </UButton>
+      </div>
+    </div>
   </div>
 </template>
 

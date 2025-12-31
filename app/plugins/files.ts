@@ -1,45 +1,14 @@
 import type { FilePlugin } from '../../types'
+import { getImageList } from '../config/images'
 
 export default defineNuxtPlugin(() => {
-  const images = ref()
-  const router = useRouter()
-  const toast = useToast()
-  // https://hub.nuxt.com/docs/storage/blob#useupload
-  const upload = useUpload('/api/images/upload', { multiple: false })
-
-  async function getImages () {
-    const file = await $fetch('/api/images')
-
-    images.value = file
-  }
-
-  async function uploadImage (image: File, filter: boolean = false) {
-    await upload(image).catch(err => toast.add({
-      color: 'red',
-      title: 'Failed to upload image',
-      description: err.data?.message || err.message
-    }))
-
-    getImages()
-
-    if (filter) {
-      router.push('/')
-    }
-  }
-
-  async function deleteImage (pathname: string) {
-    await $fetch(`/api/images/${pathname}`, { method: 'DELETE' })
-
-    getImages()
-  }
+  // 从配置文件读取图片URL列表
+  const images = ref(getImageList())
 
   return {
     provide: {
       file: {
-        getImages,
-        images,
-        uploadImage,
-        deleteImage
+        images
       } as FilePlugin
     }
   }

@@ -1,22 +1,21 @@
 /**
- * Encode filename for URL usage
+ * Encode image index for URL usage
  */
-export function encodeImageSlug (pathname: string): string {
-  return encodeURIComponent(pathname.split('.')[0] as string)
+export function encodeImageSlug (index: number | string): string {
+  return String(index)
 }
 
 /**
- * Decode URL slug back to filename
+ * Decode URL slug back to image index
  */
-export function decodeImageSlug (slug: string): string {
-  return decodeURIComponent(slug)
+export function decodeImageSlug (slug: string): number {
+  const index = parseInt(slug, 10)
+  return isNaN(index) ? -1 : index
 }
 
 /**
- * Check if two image paths match (handling encoding)
+ * Check if image index matches slug
  */
-export function isImageMatch (pathname: string, slug: string): boolean {
-  const imageName = pathname.split('.')[0]
-  const decodedSlug = decodeImageSlug(slug)
-  return imageName === decodedSlug
+export function isImageMatch (imageId: string, slug: string): boolean {
+  return imageId === slug
 }

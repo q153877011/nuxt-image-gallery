@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BlobObject } from '@nuxthub/core'
+import type { ImageItem } from '../config/images'
 
 const thumbnails = ref<HTMLUListElement>()
 const x = ref<number>(0)
@@ -8,10 +8,10 @@ const router = useRouter()
 const { images } = useFile()
 const { width } = useWindowSize()
 
-async function moveThumbnail(slug: string) {
+async function moveThumbnail(imageId: string) {
   // get width of current image
-  const currentMovie = images.value!.filter((image: BlobObject) => image.pathname.split('.')[0] === slug)
-  const index = images.value!.indexOf(currentMovie[0]!) as number
+  const currentImage = images.value!.find((image: ImageItem) => String(image.id) === imageId)
+  const index = images.value!.indexOf(currentImage!) as number
   const imgToMove = ref<HTMLElement | undefined>(thumbnails.value?.children[index] as HTMLElement | undefined)
   const imageWidth: number = imgToMove.value!.offsetWidth
 
@@ -23,16 +23,24 @@ async function moveThumbnail(slug: string) {
 onMounted(async () => {
   await nextTick()
 
-  if (router.currentRoute.value.fullPath !== '/')
-    moveThumbnail(router.currentRoute.value.params.slug![0]!)
+  const currentPath = router.currentRoute.value.fullPath
+  const slug = router.currentRoute.value.params.slug
+
+  if (currentPath !== '/' && currentPath !== '/gate' && slug && Array.isArray(slug) && slug[0]) {
+    moveThumbnail(slug[0])
+  }
 })
 
 // move thumbnail after route changes
 router.afterEach(async (to, _) => {
   await nextTick()
 
-  if (router.currentRoute.value.fullPath !== '/')
-    moveThumbnail(to.params.slug![0]!)
+  const currentPath = router.currentRoute.value.fullPath
+  const slug = to.params.slug
+
+  if (currentPath !== '/' && currentPath !== '/gate' && slug && Array.isArray(slug) && slug[0]) {
+    moveThumbnail(slug[0])
+  }
 })
 </script>
 
@@ -48,7 +56,7 @@ router.afterEach(async (to, _) => {
         :key="index"
         class="transform-gpu transition-all duration-500 mx-4"
         :thumbnail="thumbnail"
-        :style="`transform: translateX(${x}px) translateZ(0)`"
+        :style="{ transform: `translateX(${x}px) translateZ(0)` }"
       />
     </ul>
   </div>
