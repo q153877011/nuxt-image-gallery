@@ -23,7 +23,7 @@ export interface ImageItem {
 export function getImageList(): ImageItem[] {
   return imageUrls.map((url, index) => ({
     id: String(index),
-    urlc
+    url
   }))
 }
 
