@@ -1,14 +1,37 @@
 export default defineNuxtConfig({
   modules: [
-    '@nuxt/fonts',
     '@nuxt/ui',
     '@nuxt/eslint',
     '@vueuse/nuxt',
-    'nuxt-auth-utils',
-    '@nuxtjs/seo'
+    'nuxt-auth-utils'
   ],
-  devtools: { enabled: true },
-
+  devtools: { enabled: false },
+  colorMode: {
+    classSuffix: '',
+    preference: 'dark' // Default color
+  },
+  compatibilityDate: '2024-07-30',
+  eslint: {
+    config: {
+      stylistic: {
+        quotes: 'single',
+        commaDangle: 'never'
+      }
+    }
+  },
+  experimental: {
+    viewTransition: true
+  },
+  nitro: {
+    watchOptions: {
+      ignored: [
+        '**'
+      ]
+    }
+  },
+  seo: {
+    redirectToCanonicalSiteUrl: true
+  },
   site: {
     url: 'https://image-gallery.nuxt.dev/',
     name: 'Nuxt Image Gallery',
@@ -18,37 +41,18 @@ export default defineNuxtConfig({
     env: 'production',
     trailingSlash: false
   },
-
-  colorMode: {
-    classSuffix: '',
-    preference: 'dark' // Default color
-  },
-
   ui: {
     theme: {
       colors: ['gray', 'red']
     }
   },
-
-  experimental: {
-    viewTransition: true
-  },
-
-  compatibilityDate: '2024-07-30',
-
-  eslint: {
-    config: {
-      stylistic: {
-        quotes: 'single',
-        commaDangle: 'never'
+  vite: {
+    server: {
+      watch: {
+        ignored: [
+          '**'
+        ]
       }
     }
-  },
-
-  seo: {
-    redirectToCanonicalSiteUrl: true
-  },
-  nitro: {
-    preset: 'vercel'
   }
 })
