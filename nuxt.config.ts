@@ -22,13 +22,6 @@ export default defineNuxtConfig({
   experimental: {
     viewTransition: true
   },
-  nitro: {
-    watchOptions: {
-      ignored: [
-        '**'
-      ]
-    }
-  },
   seo: {
     redirectToCanonicalSiteUrl: true
   },
@@ -44,15 +37,6 @@ export default defineNuxtConfig({
   ui: {
     theme: {
       colors: ['gray', 'red']
-    }
-  },
-  vite: {
-    server: {
-      watch: {
-        ignored: [
-          '**'
-        ]
-      }
     }
   }
 })

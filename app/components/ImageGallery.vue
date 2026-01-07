@@ -7,27 +7,6 @@ const active = useState()
 <template>
   <div>
     <section v-if="images" class="relative h-screen gap-[22px] p-4">
-      <BottomMenu class="bottom-menu">
-        <template #logo>
-          <img src="/logo.svg" width="29" height="20">
-        </template>
-        <template #description>
-          <div class="flex gap-x-4 items-center">
-            <p class="bottom-menu-description text-sm sm:text-base leading-tight sm:leading-normal">
-              Media Gallery template
-            </p>
-            <NuxtLink to="https://github.com/Flosciante/nuxt-image-gallery" target="blank" class="flex items-center">
-              <UIcon name="i-simple-icons-github" class="w-5 h-5" />
-            </NuxtLink>
-          </div>
-        </template>
-        <template #buttons>
-          <div class="flex gap-x-2">
-            <!-- 按钮区域保留，但移除登录相关功能 -->
-          </div>
-        </template>
-      </BottomMenu>
-
       <div class="w-full" :class="{ 'masonry-container': images && images.length }">
         <ul v-if="images && images.length" class="grid grid-cols-1 gap-4 lg:block">
           <li v-for="image in images" ref="mansoryItem" :key="image.id"
