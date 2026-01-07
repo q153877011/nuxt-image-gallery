@@ -1,7 +1,30 @@
 export default eventHandler(async (event) => {
-  const body = await readBody(event) || {}
-  const { password } = body
+  // 使用更健壮的方式读取 body，兼容 Vercel 边缘环境
+  let body: Record<string, unknown> = {}
+  let password: string | undefined
 
+  try {
+    body = (await readBody(event)) as Record<string, unknown>
+    password = body?.password as string | undefined
+  }
+  catch {
+    // 如果 readBody 失败，尝试从原始请求中读取
+    try {
+      const rawBody = await readRawBody(event, 'utf8')
+      if (rawBody) {
+        body = JSON.parse(rawBody) as Record<string, unknown>
+        password = body?.password as string | undefined
+      }
+    }
+    catch {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Failed to parse request body'
+      })
+    }
+  }
+
+  // 验证 password 是否存在
   if (!password || typeof password !== 'string') {
     throw createError({
       statusCode: 400,
@@ -49,4 +72,3 @@ export default eventHandler(async (event) => {
     statusMessage: 'Invalid password'
   })
 })
-
