@@ -15,9 +15,12 @@
     "@nuxt/ui": "^3.2.0",
     "@vueuse/core": "^13.5.0",
     "@vueuse/nuxt": "^13.5.0",
+    "cos-nodejs-sdk-v5": "^2.15.4",
     "nuxt": "^4.0.0",
     "nuxt-auth-utils": "^0.5.20",
     "otplib": "^12.0.1",
+    "sharp": "^0.34.5",
+    "tencentcloud-sdk-nodejs": "^4.1.170",
     "vue-advanced-cropper": "^2.8.9"
   },
   "devDependencies": {

@@ -11,6 +11,12 @@ export default defineNuxtConfig({
     preference: 'dark' // Default color
   },
   compatibilityDate: '2024-07-30',
+  runtimeConfig: {
+    tencentSecretId: process.env.TENCENT_SECRET_ID,
+    tencentSecretKey: process.env.TENCENT_SECRET_KEY,
+    cosBucket: process.env.COS_BUCKET,
+    cosRegion: process.env.COS_REGION
+  },
   eslint: {
     config: {
       stylistic: {
@@ -21,9 +27,6 @@ export default defineNuxtConfig({
   },
   experimental: {
     viewTransition: true
-  },
-  seo: {
-    redirectToCanonicalSiteUrl: true
   },
   site: {
     url: 'https://image-gallery.nuxt.dev/',

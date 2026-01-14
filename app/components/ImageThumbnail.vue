@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { encodeImageSlug, isImageMatch } from '../utils/url.ts'
 import type { ImageItem } from '../config/images'
+import { useCosSign } from '../composables/useCosSign'
 
-defineProps<{
+const props = defineProps<{
   thumbnail: ImageItem
 }>()
 
 const route = useRoute()
+const thumbnailUrl = ref<string | undefined>(props.thumbnail.url)
 
-function isCurrentImage (imageId: string) {
+// 如果还没有签名 URL，获取它
+if (typeof window !== 'undefined' && !thumbnailUrl.value && props.thumbnail.key) {
+  useCosSign(props.thumbnail.key).then((url) => {
+    thumbnailUrl.value = url
+  }).catch((error) => {
+    console.error(`Failed to sign thumbnail ${props.thumbnail.key}:`, error)
+  })
+}
+
+function isCurrentImage(imageId: string) {
   const currentSlug = route.params.slug
   if (!currentSlug || !currentSlug[0]) return false
 
@@ -17,12 +28,27 @@ function isCurrentImage (imageId: string) {
 </script>
 
 <template>
-  <li v-if="$router.currentRoute.value.params.slug" class="text-black inline-block relative"
-    :class="{ 'z-50': isCurrentImage(thumbnail.id) }">
+  <li
+    v-if="$router.currentRoute.value.params.slug"
+    class="text-black inline-block relative"
+    :class="{ 'z-50': isCurrentImage(thumbnail.id) }"
+  >
     <NuxtLink :to="`/detail/${encodeImageSlug(thumbnail.id)}`">
-      <img v-if="thumbnail" width="83" height="51" :src="thumbnail.url" :alt="thumbnail.id"
+      <img
+        v-if="thumbnailUrl"
+        width="83"
+        height="51"
+        :src="thumbnailUrl"
+        :alt="thumbnail.id"
         class="object-cover rounded-md transition-all duration-500 hover:brightness-100 w-[83px] h-[51px]"
-        :class="isCurrentImage(thumbnail.id) ? 'active brightness-100' : 'opacity-75 brightness-50'">
+        :class="isCurrentImage(thumbnail.id) ? 'active brightness-100' : 'opacity-75 brightness-50'"
+      >
+      <div
+        v-else
+        class="w-[83px] h-[51px] bg-gray-800 rounded-md flex items-center justify-center"
+      >
+        <USkeleton class="h-full w-full" />
+      </div>
     </NuxtLink>
   </li>
 </template>

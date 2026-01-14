@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { decodeImageSlug } from '../utils/url.ts'
 import type { ImageItem } from '../config/images'
+import { useCosSign } from '../composables/useCosSign'
 
 const bottomMenu = ref<HTMLElement>()
 const imageEl = ref<HTMLImageElement>()
@@ -51,21 +51,48 @@ const image: ComputedRef<ImageItem | null> = computed(() => {
   return foundImage
 })
 
+// 确保图片有签名 URL
+const imageUrl = ref<string | undefined>(undefined)
+
+watch(image, async (newImage: ImageItem | null) => {
+  if (newImage) {
+    if (newImage.url) {
+      imageUrl.value = newImage.url
+    }
+    else if (newImage.key && typeof window !== 'undefined') {
+      try {
+        imageUrl.value = await useCosSign(newImage.key)
+        // 更新 images 数组中的 URL
+        const index = images.value?.findIndex((img: ImageItem) => img.id === newImage.id)
+        if (index !== undefined && index >= 0 && images.value) {
+          images.value[index] = {
+            ...newImage,
+            url: imageUrl.value
+          }
+        }
+      }
+      catch (error) {
+        console.error(`Failed to sign image ${newImage.key}:`, error)
+      }
+    }
+  }
+}, { immediate: true })
+
 // 计算图片样式（避免 SSR 问题）
 const imageStyle = computed(() => {
   if (!image.value) return {}
   const fit = (objectFitSelected.value ?? 'Contain').toLowerCase()
   return {
     filter: `contrast(${contrast.value}%) blur(${blur.value}px) invert(${invert.value}%) saturate(${saturate.value}%) hue-rotate(${hueRotate.value}deg) sepia(${sepia.value}%)`,
-    objectFit: fit as any
+    objectFit: fit as 'contain' | 'cover' | 'scale-down' | 'fill' | 'none'
   }
 })
 
 // 计算放大镜样式
 const magnifierStyle = computed(() => {
-  if (!image.value) return {}
+  if (!imageUrl.value) return {}
   return {
-    backgroundImage: `url('${image.value.url}')`
+    backgroundImage: `url('${imageUrl.value}')`
   }
 })
 
@@ -229,12 +256,12 @@ onMounted(() => {
               <UButton
                 variant="ghost"
                 color="gray"
-                    :to="(() => { const prev = images?.[currentIndex - 1]; return prev?.id ? `/detail/${prev.id}` : '/'; })()"
+                :to="(() => { const prev = images?.[currentIndex - 1]; return prev?.id ? `/detail/${prev.id}` : '/'; })()"
                 size="lg"
                 icon="i-heroicons-chevron-left"
                 class="hidden md:flex ml-4"
                 aria-label="Go to previous image"
-                    @click="active = image.id"
+                @click="active = image.id"
               />
             </UTooltip>
 
@@ -269,9 +296,9 @@ onMounted(() => {
               <div ref="imageContainer">
                 <div class="group">
                   <img
-                    v-if="image"
+                    v-if="image && imageUrl"
                     ref="imageEl"
-                    :src="image.url"
+                    :src="imageUrl"
                     :alt="image.id"
                     class="rounded object-contain transition-all duration-200 block"
                     :class="[{ imageEl: isCurrentImage }, filter ? 'w-[80%] ml-[12px]' : 'w-full']"
@@ -279,7 +306,13 @@ onMounted(() => {
                     @mousemove="magnifier && imageContainer && imageEl && magnifierEl ? magnifierImage($event, imageContainer, imageEl, magnifierEl, zoomFactor) : () => {}"
                   >
                   <div
-                    v-if="magnifier"
+                    v-else-if="image"
+                    class="w-full h-[60vh] flex items-center justify-center bg-gray-800 rounded"
+                  >
+                    <USkeleton class="h-full w-full" />
+                  </div>
+                  <div
+                    v-if="magnifier && imageUrl"
                     ref="magnifierEl"
                     class="w-[100px] h-[100px] absolute border border-gray-200 pointer-events-none rounded-full block opacity-0 group-hover:opacity-100 transition-opacity duration-200 "
                     :style="magnifierStyle"
@@ -297,12 +330,12 @@ onMounted(() => {
               <UButton
                 variant="ghost"
                 color="gray"
-                    :to="(() => { const next = images?.[currentIndex + 1]; return next?.id ? `/detail/${next.id}` : '/'; })()"
+                :to="(() => { const next = images?.[currentIndex + 1]; return next?.id ? `/detail/${next.id}` : '/'; })()"
                 size="lg"
                 icon="i-heroicons-chevron-right"
                 class="hidden md:flex mr-4 rounded-full"
                 aria-label="Go to next image"
-                    @click="active = image.id"
+                @click="active = image.id"
               />
             </UTooltip>
 
@@ -320,7 +353,7 @@ onMounted(() => {
                   size="xl"
                   class="back hidden md:flex mr-4 transition-colors duration-200"
                   aria-label="Back to gallery"
-                    @click="active = image.id"
+                  @click="active = image.id"
                 >
                   <UIcon
                     name="i-heroicons-rectangle-group-20-solid"
