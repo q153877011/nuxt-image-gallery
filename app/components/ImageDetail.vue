@@ -2,7 +2,6 @@
 import type { ImageItem } from '../config/images'
 import { useCosSign } from '../composables/useCosSign'
 
-const bottomMenu = ref<HTMLElement>()
 const imageEl = ref<HTMLImageElement>()
 const magnifierEl = ref<HTMLElement>()
 const imageContainer = ref<HTMLElement>()
@@ -23,8 +22,7 @@ const filterUpdated = ref(false)
 
 const { images } = useFile()
 
-const isSmallScreen = useMediaQuery('(max-width: 1024px)')
-const { currentIndex, isFirstImg, isLastImg, downloadImage, applyFilters, initSwipe, magnifierImage } = useImageGallery()
+const { currentIndex, isFirstImg, isLastImg, initSwipe, magnifierImage } = useImageGallery()
 
 const active = useState()
 const route = useRoute()
@@ -140,11 +138,6 @@ function resetFilter() {
   zoomFactor.value = 1
 }
 
-function cancelFilter() {
-  filter.value = false
-  resetFilter()
-}
-
 watch([contrast, blur, invert, saturate, hueRotate, sepia], () => {
   filterUpdated.value = true
 })
@@ -156,15 +149,6 @@ onMounted(() => {
 
 <template>
   <div v-if="image" class="relative min-h-screen">
-    <!-- background -->
-    <!-- <div class="absolute inset-0 w-full h-full">
-      <img
-        :src="image.url"
-        class="object-cover w-full h-full blur-[70px] brightness-[.2] will-change-[filter]"
-        alt=""
-      >
-    </div> -->
-
     <UContainer class="overflow-x-hidden relative flex items-center justify-center">
       <ImageFilters
         class="absolute md:mt-36 transition-transform duration-200"
@@ -281,7 +265,7 @@ onMounted(() => {
                   variant="ghost"
                   class="back hidden md:flex ml-4 transition-colors duration-200"
                   aria-label="Back to gallery"
-                    @click="active = image.id"
+                  @click="active = image.id"
                 >
                   <UIcon
                     name="i-heroicons-rectangle-group-20-solid"

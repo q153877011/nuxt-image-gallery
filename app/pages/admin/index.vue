@@ -27,7 +27,6 @@ async function generateLink() {
     if (result.success) {
       generatedLink.value = result.accessLink
       token.value = result.token
-      
       toast.add({
         title: '链接生成成功',
         description: '链接已生成，24小时内有效',
