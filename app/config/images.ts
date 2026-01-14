@@ -7,6 +7,7 @@ export const imageUrls = [
   'https://wedding-1256820579.cos.ap-chengdu.myqcloud.com/avator.jpg',
   'https://wedding-1256820579.cos.ap-chengdu.myqcloud.com/avator.jpg',
   'https://wedding-1256820579.cos.ap-chengdu.myqcloud.com/pexels-ruben-boekeloo-521336009-34443561.jpg',
+  'https://wedding-1256820579.cos.ap-chengdu.myqcloud.com/wedding-photos/qwy-zlx/9.1931702.jpg'
 ]
 
 /**
