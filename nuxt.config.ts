@@ -29,9 +29,6 @@ export default defineNuxtConfig({
     viewTransition: true
   },
   site: {
-    url: 'https://image-gallery.nuxt.dev/',
-    name: 'Nuxt Image Gallery',
-    description: 'A beautiful, full-stack image gallery application built with Nuxt on the edge',
     defaultLocale: 'en',
     indexable: true,
     env: 'production',
