@@ -7,19 +7,6 @@ useHead({
     lang: 'en'
   }
 })
-
-const title = 'Nuxt Image Gallery'
-const description = 'A beautiful full-stack image gallery application built with Nuxt.'
-
-useSeoMeta({
-  title,
-  ogTitle: title,
-  description,
-  ogDescription: description,
-  ogSiteName: 'Nuxt Image Gallery',
-  ogImage: 'https://image-gallery.nuxt.dev/social-card.png',
-  twitterCard: 'summary_large_image'
-})
 </script>
 
 <template>

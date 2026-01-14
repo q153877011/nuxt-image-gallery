@@ -255,7 +255,7 @@ onMounted(() => {
             >
               <!-- back to gallery if first movie -->
               <UTooltip
-                text="Back to gallery"
+                text="Back"
                 :shortcuts="['Esc']"
               >
                 <UButton
@@ -264,7 +264,7 @@ onMounted(() => {
                   color="gray"
                   variant="ghost"
                   class="back hidden md:flex ml-4 transition-colors duration-200"
-                  aria-label="Back to gallery"
+                  aria-label="Back"
                   @click="active = image.id"
                 >
                   <UIcon
@@ -326,7 +326,7 @@ onMounted(() => {
             <!-- back to gallery if last image -->
             <UTooltip
               v-else
-              text="Back to gallery"
+              text="Back"
               :shortcuts="['Esc']"
             >
               <div class="flex">
@@ -336,7 +336,7 @@ onMounted(() => {
                   to="/"
                   size="xl"
                   class="back hidden md:flex mr-4 transition-colors duration-200"
-                  aria-label="Back to gallery"
+                  aria-label="Back"
                   @click="active = image.id"
                 >
                   <UIcon
