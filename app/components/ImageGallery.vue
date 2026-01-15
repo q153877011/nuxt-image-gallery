@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import type { ImageItem } from '../config/images'
+import { getCachedImageUrl } from '../composables/useImageCache'
 
 const mansoryItem = ref<Array<HTMLElement>>([])
 const { images } = useFile()
 const active = useState()
+
+// 缓存图片 URL 的 Map（存储 blob URL）
+const cachedImageUrls = ref<Map<string, string>>(new Map())
 
 // 为每个图片获取签名链接（如果还没有）
 const signedImages = computed(() => {
@@ -18,6 +22,57 @@ const signedImages = computed(() => {
       url: undefined
     }
   }) || []
+})
+
+// 获取缓存的图片 URL
+async function getCachedUrl(imageUrl: string, imageId: string): Promise<string> {
+  // 如果已经有缓存的 URL，直接返回
+  if (cachedImageUrls.value.has(imageId)) {
+    return cachedImageUrls.value.get(imageId)!
+  }
+
+  // 获取并缓存图片
+  const cachedUrl = await getCachedImageUrl(imageUrl)
+  cachedImageUrls.value.set(imageId, cachedUrl)
+  return cachedUrl
+}
+
+// 为每个图片预加载并缓存（懒加载）
+async function loadAndCacheImage(image: ImageItem) {
+  if (!image.url || !image.id || cachedImageUrls.value.has(image.id)) {
+    return
+  }
+
+  try {
+    await getCachedUrl(image.url, image.id)
+  }
+  catch (error) {
+    console.error(`Failed to cache image ${image.id}:`, error)
+  }
+}
+
+// 监听图片列表变化，自动缓存有 URL 的图片
+watch(signedImages, (newImages: ImageItem[]) => {
+  if (typeof window === 'undefined') return
+
+  // 为每个有 URL 的图片启动缓存（异步，不阻塞）
+  newImages.forEach((image: ImageItem) => {
+    if (image.url && image.id && !cachedImageUrls.value.has(image.id)) {
+      loadAndCacheImage(image).catch(() => {
+        // 静默失败，不影响显示
+      })
+    }
+  })
+}, { immediate: true })
+
+// 组件卸载时清理 blob URL
+onUnmounted(() => {
+  cachedImageUrls.value.forEach((blobUrl: string) => {
+    if (blobUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(blobUrl)
+    }
+  })
+  cachedImageUrls.value.clear()
 })
 </script>
 
@@ -49,11 +104,12 @@ const signedImages = computed(() => {
                 v-if="image && image.url"
                 width="527"
                 height="430"
-                :src="image.url"
+                :src="cachedImageUrls.get(image.id) || image.url"
                 :alt="`Image ${image.id}`"
                 loading="lazy"
                 :class="{ imageEl: image.id === active }"
                 class="h-auto w-full max-h-[430px] rounded-md transition-all duration-200 border-image brightness-[.8] hover:brightness-100 will-change-[filter] object-cover"
+                @load="() => loadAndCacheImage(image)"
               >
               <div
                 v-else

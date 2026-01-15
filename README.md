@@ -1,79 +1,96 @@
-# NuxtHub Image Gallery Starter Template
+# Nuxt Image Gallery (COS + Signed URLs)
 
-This starter lets you get started with [NuxtHub Blob](https://hub.nuxt.com/docs/storage/blob) in seconds.
+English | [中文说明](./README.zh-CN.md)
 
-[![Deploy to NuxtHub](https://hub.nuxt.com/button.svg)](https://admin.hub.nuxt.com/new?template=image-gallery)
-
-https://github.com/Flosciante/nuxt-image-gallery/assets/904724/6e2bafdf-f5a0-42cf-b1f8-1d11c6ec919f
+A Nuxt 4 image gallery that loads images from **Tencent Cloud COS** using **short-lived signed URLs**, with a simple **gate (password / token link)** to restrict access.
 
 ## Features
 
-- 📷 Image upload and display with [`hubBlob()`](http://hub.nuxt.com/docs/storage/blob)
-- 🖼️ Image Filters: Apply a variety of filters to your images.
-- 💾 Saving: Save your images with applied filters.
-- 🌐 Cloud Storage: Blob powered by NuxtHub (cloudflare R2).
-- 🎠 Custom Carousel: Includes a custom carousel component that can be adapted for in-house use.
-- 🏃🏻 [View transition API](https://developer.chrome.com/docs/web-platform/view-transitions) The View Transitions API provides a mechanism for easily creating animated transitions between different DOM states while also updating the DOM contents in a single step.
-- 🔑 [Nuxt Auth Utils](https://github.com/Atinux/nuxt-auth-utils) Minimalist Authentication module for Nuxt exposing Vue composables and server utils.
+- **COS signed URLs**: client fetches signed URLs via `GET /api/cos-sign` (cached in-memory on the client).
+- **Browser-side image caching**: gallery uses the Cache API to cache images for 1 day.
+- **Gallery + detail viewer**: masonry grid, thumbnails strip, keyboard navigation, swipe navigation.
+- **Filters & magnifier**: filter sliders and magnifier in the detail view.
+- **Gate protection**:
+  - `/gate` password to enter the site.
+  - One-time access links (24h) backed by Upstash Redis.
 
-## Stack
+## Tech stack
 
-- [NuxtHub](https://hub.nuxt.com) - A Nuxt toolkit to build fullstack applications on the edge
-- [NuxtUI v3](https://ui.nuxt.com/getting-started) - A UI library for modern web applications using Radix Vue and Tailwind CSS v4 under the hood
-- [VueUse](https://github.com/antfu/vueuse) - Collection of useful composition APIs
-- [ESLint](https://eslint.org/) with [@nuxt/eslint-config](https://github.com/nuxt/eslint), single quotes, no semi
-- [TypeScript](https://www.typescriptlang.org/)
+- **Nuxt**: Nuxt 4
+- **UI**: `@nuxt/ui`
+- **Composables**: `@vueuse/nuxt`
+- **Auth/session**: `nuxt-auth-utils`
+- **Storage**: Tencent Cloud COS (`cos-nodejs-sdk-v5`)
+- **Token store**: Upstash Redis (`@upstash/redis`)
 
-## Setup
+## Quick start
 
-1. Clone this repository to your local machine.
-2. Install dependencies using the command `pnpm install` or your favorite package manager.
-3. Run the application with the command `pnpm dev` or your favorite package manager.
+- **Install**: `pnpm install`
+- **Configure env**: `cp .env.example .env` and fill required values
+- **Dev**: `pnpm dev`
 
-> If you don't have pnpm installed, run: `corepack enable pnpm`
+Other scripts:
 
-## Environment Variables
+- **build**: `pnpm build`
+- **preview**: `pnpm preview`
+- **lint**: `pnpm lint`
+- **typecheck**: `pnpm typecheck`
 
-- `NUXT_ADMIN_PASSWORD` - A password to access the admin panel and upload images, will default to `admin` if not provided.
-- `NUXT_SESSION_PASSWORD` - A secret key for session encryption used by [nuxt-auth-utils](https://github.com/Atinux/nuxt-auth-utils), will be generated automatically if not provided in development mode.
-- `NUXT_GATE_PASSWORD` - Password for gate verification page. Users need to enter this password to access the site. Will default to `gate123` if not provided (development only, must be set in production).
+## Environment variables
 
-## Development
+> Do not commit secrets. Only put them in `.env` / your deployment platform’s env settings.
 
-```bash
-pnpm dev
-```
+- **`NUXT_SESSION_PASSWORD`**: used by `nuxt-auth-utils` to encrypt session cookies.
+- **`NUXT_ADMIN_PASSWORD`**: admin login password for `POST /api/auth` (defaults to `admin` if not set).
+- **`NUXT_GATE_PASSWORD`**: password for the `/gate` page (defaults to `gate123` if not set; set it in production).
 
-### Remote Storage
+Tencent COS (required for signing + uploading):
 
-Once you deployed your project, you can connect to your remote database locally running:
+- **`TENCENT_SECRET_ID`**
+- **`TENCENT_SECRET_KEY`**
+- **`COS_BUCKET`**: bucket name
+- **`COS_REGION`**: e.g. `ap-guangzhou`
 
-```bash
-pnpm dev --remote
-```
+Upstash Redis (required for one-time token links):
 
-### Deploy
+- **`UPSTASH_REDIS_REST_URL`**
+- **`UPSTASH_REDIS_REST_TOKEN`**
 
-You can deploy this project on your Cloudflare account for free and with zero configuration using [NuxtHub](https://hub.nuxt.com).
+## Routes
 
-```bash
-npx nuxthub deploy
-```
+- **`/`**: gallery
+- **`/detail/[...slug]`**: image detail viewer
+- **`/gate`**: gate password page
+- **`/admin`**: generate one-time access links (requires gate password cookie)
 
-It's also possible to leverage Cloudflare Pages CI for deploying, learn more about the different options on https://hub.nuxt.com/docs/getting-started/deploy
+## APIs
 
-Learn more about remote storage on https://hub.nuxt.com/docs/getting-started/remote-storage
+- **`GET /api/cos-sign?key=...`**
+  - Returns `{ url, expires }` where `expires` is seconds.
+- **`POST /api/upload`**
+  - Multipart upload; converts to `webp` via `sharp`, then uploads to COS.
+  - Optional `folder` field is validated to prevent path injection.
+- **`POST /api/gate/verify`**
+  - Body: `{ password }`
+  - On success sets cookie `gate_verified=true`.
+- **`POST /api/gate/generate-link`**
+  - Requires cookie `gate_verified=true`.
+  - Returns `{ accessLink, token }` with 24h expiry.
+- **`POST /api/gate/validate-token`**
+  - Body: `{ token }`
+  - Validates token via Upstash Redis.
+- **`POST /api/auth`**
+  - Body: `{ password }`
+  - Sets a user session with `{ role: 'admin' }`.
 
-## Template Starter
+## Image list configuration
 
-This project is a template starter provided by NuxtHub. It's designed to help kickstart your NuxtHub files project.
+This project currently uses a static list of COS object keys:
 
-Check out the [deployment documentation](https://hub.nuxt.com/docs/getting-started/deploy) for more information.
+- Edit `app/config/images.ts` and update `imageKeys`.
+- The UI will request signed URLs for those keys on the client.
 
-## Contribution
+## Notes
 
-Contributions are welcome! Feel free to open an issue to report a bug or submit a feature request via a pull request.
-
-## Credits
-
-Thanks to [Atinux](https://github.com/Atinux) for the contributions and advice provided.
+- Signed URLs are cached client-side (in-memory) until expiry.
+- The gallery additionally caches fetched images in the browser Cache API for 24h.

@@ -32,10 +32,9 @@ export default eventHandler(async (event) => {
     })
   }
 
-  console.log(process.env.NUXT_GATE_PASSWORD)
   // 从环境变量获取 gate 密码
   // 如果没有设置，使用默认值（仅用于开发，生产环境必须设置）
-  const gatePassword = process.env.NUXT_GATE_PASSWORD || 'gate123'
+  const gatePassword = process.env.NUXT_GATE_PASSWORD
 
   // 防暴力破解：检查请求频率（简单实现，可以改进为使用 Redis 等）
   const session = await getUserSession(event)
