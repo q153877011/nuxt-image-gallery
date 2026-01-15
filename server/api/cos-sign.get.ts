@@ -23,26 +23,26 @@ export default defineEventHandler(async (event) => {
   // }
 
   try {
-    const cos = new COS({
-      SecretId: config.tencentSecretId,
-      SecretKey: config.tencentSecretKey
-    })
+  const cos = new COS({
+    SecretId: config.tencentSecretId,
+    SecretKey: config.tencentSecretKey
+  })
 
     // 设置过期时间为 1 小时（3600 秒），可以根据需要调整
     const expires = 3600
 
-    const url = cos.getObjectUrl({
-      Bucket: config.cosBucket,
-      Region: config.cosRegion,
-      Key: key,
-      Sign: true,
-      Expires: expires
-    })
+  const url = cos.getObjectUrl({
+    Bucket: config.cosBucket,
+    Region: config.cosRegion,
+    Key: key,
+    Sign: true,
+    Expires: expires
+  })
 
     // 设置缓存头，允许客户端缓存
     setHeader(event, 'Cache-Control', `public, max-age=${expires - 60}`) // 提前 60 秒过期
 
-    return { url, expires }
+  return { url, expires }
   }
   catch (error) {
     console.error('COS sign error:', error)
