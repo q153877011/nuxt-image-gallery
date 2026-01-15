@@ -4,7 +4,10 @@
  * 注意：这是内存存储，服务器重启后数据会丢失
  * 生产环境建议使用 Redis 或数据库
  */
+// import { get, set, has } from '@vercel/edge-config'
+import { Redis } from '@upstash/redis'
 
+const redis = Redis.fromEnv()
 interface TokenInfo {
   token: string
   createdAt: number
@@ -12,15 +15,21 @@ interface TokenInfo {
   used: boolean
 }
 
-// 内存存储 token
-const tokenStore = new Map<string, TokenInfo>()
+export async function getTokens(): Promise<TokenInfo[]> {
+  if (!await redis.exists('tokens')) {
+    await redis.set('tokens', [])
+  }
+  const tokens = await redis.get('tokens')
+  return tokens as unknown as TokenInfo[]
+}
 
 // 清理过期 token（每10分钟执行一次）
-setInterval(() => {
+setInterval(async () => {
   const now = Date.now()
-  for (const [token, info] of tokenStore.entries()) {
-    if (info.expiresAt < now) {
-      tokenStore.delete(token)
+  const tokens = await getTokens()
+  for (const token of tokens) {
+    if (token.expiresAt < now) {
+      await deleteToken(token.token)
     }
   }
 }, 10 * 60 * 1000) // 10分钟
@@ -42,34 +51,35 @@ export function generateToken(): string {
  * 创建 token 并存储
  * @param expiresInHours 过期时间（小时），默认24小时
  */
-export function createToken(expiresInHours: number = 24): string {
+export async function createToken(expiresInHours: number = 24): Promise<string> {
   const token = generateToken()
   const now = Date.now()
   const expiresAt = now + (expiresInHours * 60 * 60 * 1000)
 
-  tokenStore.set(token, {
+  const tokens = await getTokens()
+  tokens.push({
     token,
     createdAt: now,
     expiresAt,
     used: false
   })
-
+  await redis.set('tokens', tokens)
   return token
 }
 
 /**
  * 验证 token 是否有效
  */
-export function validateToken(token: string): boolean {
-  const info = tokenStore.get(token)
-
+export async function validateToken(token: string): Promise<boolean> {
+  const tokens = await getTokens()
+  const info = tokens.find(t => t.token === token)
   if (!info) {
     return false
   }
 
   // 检查是否过期
   if (info.expiresAt < Date.now()) {
-    tokenStore.delete(token)
+    await redis.set('tokens', tokens.filter(t => t.token !== token))
     return false
   }
 
@@ -84,24 +94,27 @@ export function validateToken(token: string): boolean {
 /**
  * 标记 token 为已使用
  */
-export function markTokenAsUsed(token: string): void {
-  const info = tokenStore.get(token)
+export async function markTokenAsUsed(token: string): Promise<void> {
+  const tokens = await getTokens()
+  const info = tokens.find(t => t.token === token)
   if (info) {
     info.used = true
+    await redis.set('tokens', tokens.map(t => t.token === token ? { ...t, used: true } : t))
   }
 }
 
 /**
  * 删除 token
  */
-export function deleteToken(token: string): void {
-  tokenStore.delete(token)
+export async function deleteToken(token: string): Promise<void> {
+  const tokens = await getTokens()
+  await redis.set('tokens', tokens.filter(t => t.token !== token))
 }
 
 /**
  * 获取所有 token（用于管理页面）
  */
-export function getAllTokens(): TokenInfo[] {
-  return Array.from(tokenStore.values())
+export async function getAllTokens(): Promise<TokenInfo[]> {
+  const tokens = await getTokens()
+  return tokens
 }
-

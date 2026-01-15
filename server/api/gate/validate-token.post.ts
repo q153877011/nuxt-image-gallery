@@ -1,6 +1,7 @@
 import { validateToken } from '../../utils/token-store'
 
 export default eventHandler(async (event) => {
+  console.log('validate-token ---->', event)
   const body = await readBody(event) || {}
   const { token } = body
 
@@ -13,4 +14,3 @@ export default eventHandler(async (event) => {
 
   return { valid }
 })
-
