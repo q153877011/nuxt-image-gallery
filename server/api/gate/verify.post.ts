@@ -36,6 +36,13 @@ export default eventHandler(async (event) => {
   // 如果没有设置，使用默认值（仅用于开发，生产环境必须设置）
   const gatePassword = process.env.NUXT_GATE_PASSWORD
 
+  if (!gatePassword) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'NUXT_GATE_PASSWORD is not set'
+    })
+  }
+
   // 防暴力破解：检查请求频率（简单实现，可以改进为使用 Redis 等）
   const session = await getUserSession(event)
   if (session.lastAttemptAt && typeof session.lastAttemptAt === 'number' && Date.now() - session.lastAttemptAt < 5000) {
@@ -57,8 +64,11 @@ export default eventHandler(async (event) => {
       maxAge: 60 * 60 * 24 // 24 小时
     })
 
-    // 清除失败尝试记录
-    await setUserSession(event, {})
+    // 设置 superadmin 身份（通过 /gate 密码进入）
+    // 同时清理失败尝试记录
+    await setUserSession(event, {
+      user: { role: 'superadmin' }
+    })
 
     return { verified: true }
   }

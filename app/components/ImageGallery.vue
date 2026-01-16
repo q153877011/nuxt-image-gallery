@@ -6,6 +6,14 @@ const mansoryItem = ref<Array<HTMLElement>>([])
 const { images } = useFile()
 const active = useState()
 
+const imagesLoading = useState<boolean>('imagesLoading', () => false)
+const imagesLoaded = useState<boolean>('imagesLoaded', () => false)
+
+// 让类型检查工具知道这些变量在模板中会被使用（无副作用）
+void mansoryItem.value
+void imagesLoading.value
+void imagesLoaded.value
+
 // 缓存图片 URL 的 Map（存储 blob URL）
 const cachedImageUrls = ref<Map<string, string>>(new Map())
 
@@ -120,10 +128,27 @@ onUnmounted(() => {
             </NuxtLink>
           </li>
         </ul>
-        <div v-else class="text-2xl text-white flex flex-col gap-y-4 items-center justify-center h-full w-full pb-8">
-          <p class="text-gray-400">
+        <div
+          v-else
+          class="text-2xl text-white flex flex-col gap-y-4 items-center justify-center h-full w-full pb-8"
+        >
+          <div v-if="imagesLoading" class="flex flex-col items-center gap-3">
+            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 text-gray-300 animate-spin" />
+            <p class="text-gray-400 text-base">
+              Loading images...
+            </p>
+          </div>
+
+          <p v-else-if="imagesLoaded" class="text-gray-400">
             No images available
           </p>
+
+          <div v-else class="flex flex-col items-center gap-3">
+            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 text-gray-300 animate-spin" />
+            <p class="text-gray-400 text-base">
+              Loading images...
+            </p>
+          </div>
         </div>
       </div>
     </section>

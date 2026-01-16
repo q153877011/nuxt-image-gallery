@@ -1,6 +1,6 @@
 declare module '#auth-utils' {
   interface User {
-    role: 'admin'
+    role: 'admin' | 'superadmin'
   }
 
   interface UserSession {
