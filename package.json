@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "nuxt dev",
+    "dev": "nuxt dev --port=3001",
     "build": "nuxt build",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
@@ -13,7 +13,7 @@
   "dependencies": {
     "@nuxt/eslint": "^1.6.0",
     "@nuxt/ui": "^3.2.0",
-    "@upstash/redis": "^1.36.1",
+    "@supabase/supabase-js": "^2.91.0",
     "@vueuse/core": "^13.5.0",
     "@vueuse/nuxt": "^13.5.0",
     "cos-nodejs-sdk-v5": "^2.15.4",

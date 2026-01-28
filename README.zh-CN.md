@@ -2,7 +2,7 @@
 
 [English](./README.md) | 中文说明
 
-这是一个基于 **Nuxt 4** 的图片展示站点：图片存储在 **腾讯云 COS**，前端通过后端接口获取**短期签名 URL** 来加载图片，并提供一个简单的**门禁（密码 / 一次性访问链接）**来限制访问。
+这是一个基于 **Nuxt 4** 的图片展示站点：图片存储在 **腾讯云 COS**，前端通过后端接口获取**短期签名 URL** 来加载图片，并通过 **token 门禁**限制访问。
 
 ## 功能
 
@@ -10,9 +10,10 @@
 - **浏览器侧图片缓存**：图库页使用 Cache API 将图片缓存 1 天，加速二次访问。
 - **图库 + 大图查看**：瀑布流/网格展示、顶部缩略图条、键盘/手势切换。
 - **滤镜与放大镜**：大图页支持滤镜参数调整与放大镜。
-- **全站门禁**：
-  - `/gate` 入口密码。
-  - `/admin` 生成 24 小时有效的一次性访问链接（Token 存在 Upstash Redis）。
+- **token 门禁**：
+  - 通过外部系统生成的链接访问，例如 `/?token=...`
+  - token 由 `POST /api/gate/validate-token` 校验
+  - **token 的生成由外部系统负责，本项目不提供生成能力**
 
 ## 技术栈
 
@@ -21,7 +22,7 @@
 - **组合式工具**：`@vueuse/nuxt`
 - **会话/鉴权**：`nuxt-auth-utils`
 - **对象存储**：腾讯云 COS（`cos-nodejs-sdk-v5`）
-- **Token 存储**：Upstash Redis（`@upstash/redis`）
+- **数据库**：Supabase（按 `user_id` 查询图片、校验门禁 token）
 
 ## 快速开始
 
@@ -42,7 +43,6 @@
 
 - **`NUXT_SESSION_PASSWORD`**：`nuxt-auth-utils` 用于加密 session cookie。
 - **`NUXT_ADMIN_PASSWORD`**：`POST /api/auth` 的管理员密码（未设置时默认 `admin`）。
-- **`NUXT_GATE_PASSWORD`**：`/gate` 页面密码（未设置时默认 `gate123`；生产环境务必设置）。
 
 腾讯云 COS（签名与上传必需）：
 
@@ -51,17 +51,17 @@
 - **`COS_BUCKET`**：桶名称
 - **`COS_REGION`**：例如 `ap-guangzhou`
 
-Upstash Redis（一次性访问链接必需）：
+Supabase（服务端）：
 
-- **`UPSTASH_REDIS_REST_URL`**
-- **`UPSTASH_REDIS_REST_TOKEN`**
+- **`SUPABASE_URL`**
+- **`SUPABASE_SERVICE_ROLE_KEY`**（推荐在服务端使用）
+- **`SUPABASE_ANON_KEY`**（可选兜底）
 
 ## 路由说明
 
 - **`/`**：图片库
 - **`/detail/[...slug]`**：大图页
-- **`/gate`**：门禁验证页
-- **`/admin`**：生成一次性访问链接（需要先通过门禁密码）
+- **`/gate`**：无有效 token 时的提示页
 
 ## 后端接口
 
@@ -70,25 +70,18 @@ Upstash Redis（一次性访问链接必需）：
 - **`POST /api/upload`**
   - Multipart 上传；服务端用 `sharp` 转为 `webp` 后上传到 COS。
   - 可选 `folder` 字段会做白名单校验，防止路径注入。
-- **`POST /api/gate/verify`**
-  - Body：`{ password }`
-  - 通过后写入 cookie：`gate_verified=true`。
-- **`POST /api/gate/generate-link`**
-  - 需要 cookie：`gate_verified=true`。
-  - 返回 `{ accessLink, token }`，默认 24 小时有效。
 - **`POST /api/gate/validate-token`**
   - Body：`{ token }`
-  - 通过 Upstash Redis 验证 token。
+  - 通过 Supabase `tokens` 表校验；返回 `{ valid, user_id? }`。
+- **`GET /api/images?user_id=...`**
+  - 返回 `{ keys }`（COS 对象 key 列表）。
 - **`POST /api/auth`**
   - Body：`{ password }`
   - 设置用户 session：`{ role: 'admin' }`。
 
-## 图片列表如何维护
+## 图片来源
 
-当前图片来源是一个静态的 COS Key 列表：
-
-- 编辑 `app/config/images.ts` 中的 `imageKeys`。
-- 客户端会为这些 key 批量请求签名链接并展示。
+首页通过 query 读取 `user_id`（例如 `/?user_id=123`），服务端到 Supabase `images` 表中查询该用户的图片 URL，并转换为 COS key 列表，随后前端再批量签名并展示。
 
 ## 备注
 

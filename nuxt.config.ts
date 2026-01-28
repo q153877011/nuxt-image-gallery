@@ -15,7 +15,12 @@ export default defineNuxtConfig({
     tencentSecretId: process.env.TENCENT_SECRET_ID,
     tencentSecretKey: process.env.TENCENT_SECRET_KEY,
     cosBucket: process.env.COS_BUCKET,
-    cosRegion: process.env.COS_REGION
+    cosRegion: process.env.COS_REGION,
+
+    // Supabase (server-side)
+    supabaseUrl: process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY
   },
   eslint: {
     config: {

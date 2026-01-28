@@ -8,53 +8,80 @@ const toast = useToast()
 const imagesLoading = useState<boolean>('imagesLoading', () => false)
 const imagesLoaded = useState<boolean>('imagesLoaded', () => false)
 
-const gateVerified = useCookie<string | null>('gate_verified', { httpOnly: false }) as unknown as { value: string | null }
-const tokenVerified = useCookie<string | null>('gate_token_verified', { httpOnly: false }) as unknown as { value: string | null }
+const route = useRoute()
 
-async function loadImagesFromKV() {
-  // 已有数据就不重复拉取
-  if (images.value && images.value.length > 0) {
-    imagesLoaded.value = true
-    imagesLoading.value = false
-    return
+function getUserIdFromRoute(): string | null {
+  const raw = route.query.user_id
+  const val = Array.isArray(raw) ? raw[0] : raw
+  if (typeof val === 'string' && val.length > 0) {
+    return val
+  }
+  return null
+}
+
+function getErrorMessage(err: unknown): string {
+  // $fetch 的错误通常会带 data.message
+  if (typeof err === 'object' && err) {
+    const maybeData = (err as Record<string, unknown>).data
+    if (typeof maybeData === 'object' && maybeData) {
+      const msg = (maybeData as Record<string, unknown>).message
+      if (typeof msg === 'string' && msg.length > 0) {
+        return msg
+      }
+    }
   }
 
-  // 未通过验证不读取
-  const authed = String(gateVerified.value) === 'true' || String(tokenVerified.value) === 'true'
-  if (!authed) {
-    imagesLoaded.value = false
-    imagesLoading.value = false
-    return
-  }
+  return err instanceof Error ? err.message : '请稍后重试'
+}
 
+async function loadImagesForUser(userId: string) {
   imagesLoading.value = true
+  imagesLoaded.value = false
+  images.value = []
 
   try {
-    const res = await $fetch<{ keys: string[] }>('/api/images', { method: 'GET' })
+    const res = await $fetch<{ keys: string[] }>('/api/images', {
+      method: 'GET',
+      params: { user_id: userId }
+    })
+
     const list = buildImageList(res.keys || [])
 
     // 首页需要展示，所以批量签名一次
     const signed = await useCosSignBatch(list)
     images.value = signed
-    imagesLoaded.value = true
   }
-  catch (err: any) {
-    console.error('Failed to load images from KV:', err)
-    imagesLoaded.value = true
+  catch (err: unknown) {
+    console.error('Failed to load images from Supabase:', err)
+
     toast.add({
       title: '图片加载失败',
-      description: err?.data?.message || err?.message || '请稍后重试',
+      description: getErrorMessage(err),
       color: 'red'
     })
   }
   finally {
+    imagesLoaded.value = true
     imagesLoading.value = false
   }
 }
 
-// 进入首页（客户端）立即开始拉取，这样不会先闪现“无图片”
+// 客户端进入首页后，根据 user_id 拉取
 if (typeof window !== 'undefined') {
-  loadImagesFromKV()
+  watch(
+    () => getUserIdFromRoute(),
+    (userId) => {
+      if (userId) {
+        loadImagesForUser(userId)
+      }
+      else {
+        images.value = []
+        imagesLoaded.value = true
+        imagesLoading.value = false
+      }
+    },
+    { immediate: true }
+  )
 }
 </script>
 

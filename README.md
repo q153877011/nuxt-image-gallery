@@ -2,7 +2,7 @@
 
 English | [中文说明](./README.zh-CN.md)
 
-A Nuxt 4 image gallery that loads images from **Tencent Cloud COS** using **short-lived signed URLs**, with a simple **gate (password / token link)** to restrict access.
+A Nuxt 4 image gallery that loads images from **Tencent Cloud COS** using **short-lived signed URLs**, and uses a **token gate** to restrict access.
 
 ## Features
 
@@ -10,9 +10,10 @@ A Nuxt 4 image gallery that loads images from **Tencent Cloud COS** using **shor
 - **Browser-side image caching**: gallery uses the Cache API to cache images for 1 day.
 - **Gallery + detail viewer**: masonry grid, thumbnails strip, keyboard navigation, swipe navigation.
 - **Filters & magnifier**: filter sliders and magnifier in the detail view.
-- **Gate protection**:
-  - `/gate` password to enter the site.
-  - One-time access links (24h) backed by Upstash Redis.
+- **Token gate**:
+  - Access the site via an external token link like `/?token=...`.
+  - The token is validated by `POST /api/gate/validate-token`.
+  - **Token generation is handled outside this project.**
 
 ## Tech stack
 
@@ -21,7 +22,7 @@ A Nuxt 4 image gallery that loads images from **Tencent Cloud COS** using **shor
 - **Composables**: `@vueuse/nuxt`
 - **Auth/session**: `nuxt-auth-utils`
 - **Storage**: Tencent Cloud COS (`cos-nodejs-sdk-v5`)
-- **Token store**: Upstash Redis (`@upstash/redis`)
+- **Database**: Supabase (query images by `user_id`, validate gate tokens)
 
 ## Quick start
 
@@ -42,7 +43,6 @@ Other scripts:
 
 - **`NUXT_SESSION_PASSWORD`**: used by `nuxt-auth-utils` to encrypt session cookies.
 - **`NUXT_ADMIN_PASSWORD`**: admin login password for `POST /api/auth` (defaults to `admin` if not set).
-- **`NUXT_GATE_PASSWORD`**: password for the `/gate` page (defaults to `gate123` if not set; set it in production).
 
 Tencent COS (required for signing + uploading):
 
@@ -51,17 +51,17 @@ Tencent COS (required for signing + uploading):
 - **`COS_BUCKET`**: bucket name
 - **`COS_REGION`**: e.g. `ap-guangzhou`
 
-Upstash Redis (required for one-time token links):
+Supabase (server-side):
 
-- **`UPSTASH_REDIS_REST_URL`**
-- **`UPSTASH_REDIS_REST_TOKEN`**
+- **`SUPABASE_URL`**
+- **`SUPABASE_SERVICE_ROLE_KEY`** (recommended on server)
+- **`SUPABASE_ANON_KEY`** (optional fallback)
 
 ## Routes
 
 - **`/`**: gallery
 - **`/detail/[...slug]`**: image detail viewer
-- **`/gate`**: gate password page
-- **`/admin`**: generate one-time access links (requires gate password cookie)
+- **`/gate`**: hint page when no valid token is provided
 
 ## APIs
 
@@ -70,25 +70,18 @@ Upstash Redis (required for one-time token links):
 - **`POST /api/upload`**
   - Multipart upload; converts to `webp` via `sharp`, then uploads to COS.
   - Optional `folder` field is validated to prevent path injection.
-- **`POST /api/gate/verify`**
-  - Body: `{ password }`
-  - On success sets cookie `gate_verified=true`.
-- **`POST /api/gate/generate-link`**
-  - Requires cookie `gate_verified=true`.
-  - Returns `{ accessLink, token }` with 24h expiry.
 - **`POST /api/gate/validate-token`**
   - Body: `{ token }`
-  - Validates token via Upstash Redis.
+  - Validates token via Supabase `tokens` table; returns `{ valid, user_id? }`.
+- **`GET /api/images?user_id=...`**
+  - Returns `{ keys }` (COS object keys) for the given `user_id`.
 - **`POST /api/auth`**
   - Body: `{ password }`
   - Sets a user session with `{ role: 'admin' }`.
 
-## Image list configuration
+## Image source
 
-This project currently uses a static list of COS object keys:
-
-- Edit `app/config/images.ts` and update `imageKeys`.
-- The UI will request signed URLs for those keys on the client.
+The home page reads `user_id` from query (e.g. `/?user_id=123`). The server then queries Supabase `images` table and converts image URLs to COS keys, which are later signed and rendered on the client.
 
 ## Notes
 

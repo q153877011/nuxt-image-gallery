@@ -7,13 +7,6 @@ useHead({
     lang: 'en'
   }
 })
-
-const gateVerified = useCookie<string | null>('gate_verified', {
-  httpOnly: false,
-  sameSite: 'strict'
-}) as unknown as { value: string | null }
-
-const isSuperAdmin = computed(() => String(gateVerified.value) === 'true')
 </script>
 
 <template>
@@ -22,18 +15,6 @@ const isSuperAdmin = computed(() => String(gateVerified.value) === 'true')
     :class="{ 'flex flex-col md:block': $router.currentRoute.value.fullPath !== '/' && $router.currentRoute.value.fullPath !== '/gate' }"
   >
     <NuxtPage />
-
-    <!-- 头部入口：仅通过 /gate 密码验证（superadmin）可见 -->
-    <UButton
-      v-if="isSuperAdmin && $router.currentRoute.value.fullPath !== '/gate'"
-      to="/admin"
-      size="sm"
-      color="primary"
-      variant="solid"
-      class="fixed top-4 right-4 z-[10000]"
-    >
-      Admin
-    </UButton>
 
     <ImageThumbnailList
       v-if="$router.currentRoute.value.fullPath !== '/gate'"
