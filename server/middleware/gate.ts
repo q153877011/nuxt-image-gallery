@@ -26,6 +26,8 @@ async function validateTokenAndGetUserId(token: string): Promise<string | null> 
     .eq('token', token)
     .limit(1)
     .maybeSingle()
+  
+    console.log('data', data)
 
   if (error || !data) return null
 
@@ -38,7 +40,6 @@ async function validateTokenAndGetUserId(token: string): Promise<string | null> 
       .from('tokens')
       .update({ used: true })
       .eq('id', data.id)
-      .or('used.is.null,used.eq.false')
       .select('user_id')
       .maybeSingle()
 

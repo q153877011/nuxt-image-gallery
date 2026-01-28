@@ -24,6 +24,7 @@ function devReason(reason: string, detail?: string) {
 }
 
 export default eventHandler(async (event) => {
+  console.log('validate-token.post')
   const body = await readBody(event) || {}
   const rawToken = (body as Record<string, unknown>)?.token
 
@@ -41,6 +42,8 @@ export default eventHandler(async (event) => {
     .eq('token', token)
     .limit(1)
     .maybeSingle()
+
+    console.log('data', data)
 
   if (error) {
     return { valid: false, ...devReason('db_error', error.message) }
@@ -62,7 +65,6 @@ export default eventHandler(async (event) => {
       .from('tokens')
       .update({ used: true })
       .eq('id', data.id)
-      .or('used.is.null,used.eq.false')
       .select('user_id')
       .maybeSingle()
 
