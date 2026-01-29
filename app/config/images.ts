@@ -27,6 +27,10 @@ export interface ImageItem {
   id: string
   key: string // COS key，用于获取签名链接
   url?: string // 签名后的 URL（动态生成）
+
+  // 计数类字段来自 Supabase（int8），可能会以 string 返回
+  good?: string | number | null
+  view_cnt?: string | number | null
 }
 
 /**

@@ -5,9 +5,132 @@ import { getCachedImageUrl } from '../composables/useImageCache'
 const mansoryItem = ref<Array<HTMLElement>>([])
 const { images } = useFile()
 const active = useState()
+const route = useRoute()
 
 const imagesLoading = useState<boolean>('imagesLoading', () => false)
 const imagesLoaded = useState<boolean>('imagesLoaded', () => false)
+
+const viewedKeys = ref<Set<string>>(new Set())
+const goodLoadingKeys = ref<Set<string>>(new Set())
+const goodBumpKeys = ref<Set<string>>(new Set())
+
+function getGoodText(image: ImageItem): string | null {
+  const raw = image.good
+  if (raw === null || raw === undefined) return null
+
+  const text = typeof raw === 'number' ? String(raw) : raw
+  if (!text || text === '0') return null
+  return text
+}
+
+function bumpGood(key: string) {
+  if (!key) return
+
+  goodBumpKeys.value.add(key)
+  window.setTimeout(() => {
+    goodBumpKeys.value.delete(key)
+  }, 180)
+}
+
+function setImageGood(key: string, good: string | number | null) {
+  if (!images.value || images.value.length === 0) return
+
+  const idx = images.value.findIndex(img => img.key === key)
+  if (idx < 0) return
+
+  images.value[idx] = {
+    ...images.value[idx],
+    good
+  }
+}
+
+const userId = computed(() => {
+  const raw = route.query.user_id
+  const val = Array.isArray(raw) ? raw[0] : raw
+  return typeof val === 'string' && val.length > 0 ? val : null
+})
+
+async function incrementGood(image: ImageItem) {
+  if (typeof window === 'undefined') return
+  if (!userId.value || !image.key) return
+  if (goodLoadingKeys.value.has(image.key)) return
+
+  bumpGood(image.key)
+
+  goodLoadingKeys.value.add(image.key)
+  try {
+    const res = await $fetch<{ ok: boolean, good?: string | number | null }>('/api/images/good', {
+      method: 'POST',
+      body: {
+        user_id: userId.value,
+        key: image.key
+      }
+    })
+
+    if (res && res.ok) {
+      // 服务端会返回自增后的值（int8 可能是 string）
+      if (res.good !== undefined) {
+        setImageGood(image.key, res.good ?? null)
+      }
+      else {
+        // 兜底：如果未返回，至少本地 +1（避免无反馈）
+        const current = getGoodText(image)
+        const next = current ? String((BigInt(current) + 1n)) : '1'
+        setImageGood(image.key, next)
+      }
+    }
+  }
+  catch (err) {
+    console.error('Failed to increment good:', err)
+  }
+  finally {
+    goodLoadingKeys.value.delete(image.key)
+  }
+}
+
+async function incrementViewIfNeeded(key: string) {
+  if (!userId.value) return
+  if (viewedKeys.value.has(key)) return
+
+  viewedKeys.value.add(key)
+  try {
+    await $fetch('/api/images/view', {
+      method: 'POST',
+      body: {
+        user_id: userId.value,
+        key
+      }
+    })
+  }
+  catch (err) {
+    // 静默失败：不影响浏览
+    console.error('Failed to increment view_cnt:', err)
+  }
+}
+
+const observer = ref<IntersectionObserver | null>(null)
+
+function setupViewObserver() {
+  if (typeof window === 'undefined') return
+
+  observer.value?.disconnect()
+  observer.value = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return
+      const el = entry.target as HTMLElement
+      const key = el.dataset.imageKey
+      if (key) {
+        incrementViewIfNeeded(key)
+      }
+    })
+  }, {
+    threshold: 0.25
+  })
+
+  mansoryItem.value.forEach((el) => {
+    observer.value?.observe(el)
+  })
+}
 
 // 让类型检查工具知道这些变量在模板中会被使用（无副作用）
 void mansoryItem.value
@@ -73,8 +196,52 @@ watch(signedImages, (newImages: ImageItem[]) => {
   })
 }, { immediate: true })
 
+// 加载中时展示的骨架数量
+const skeletonItems = computed(() => Array.from({ length: 12 }, (_, i) => i))
+
+function tryRestoreScrollPosition() {
+  if (typeof window === 'undefined') return
+
+  let targetId: string | null = null
+  try {
+    targetId = sessionStorage.getItem('gallery_return_id')
+  }
+  catch {
+    return
+  }
+
+  if (!targetId) return
+
+  const el = document.querySelector(`[data-image-id="${targetId}"]`) as HTMLElement | null
+  if (el) {
+    el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior })
+    sessionStorage.removeItem('gallery_return_id')
+    sessionStorage.removeItem('gallery_scroll_y')
+  }
+}
+
+watch(signedImages, async () => {
+  if (typeof window === 'undefined') return
+  await nextTick()
+  tryRestoreScrollPosition()
+  setupViewObserver()
+}, { immediate: true })
+
+onActivated(async () => {
+  if (typeof window === 'undefined') return
+  await nextTick()
+  tryRestoreScrollPosition()
+  setupViewObserver()
+})
+
+onDeactivated(() => {
+  observer.value?.disconnect()
+})
+
 // 组件卸载时清理 blob URL
 onUnmounted(() => {
+  observer.value?.disconnect()
+
   cachedImageUrls.value.forEach((blobUrl: string) => {
     if (blobUrl.startsWith('blob:')) {
       URL.revokeObjectURL(blobUrl)
@@ -102,52 +269,93 @@ onUnmounted(() => {
             v-for="image in signedImages"
             ref="mansoryItem"
             :key="image.id"
+            :data-image-id="image.id"
+            :data-image-key="image.key"
             class="relative w-full group masonry-item"
           >
             <NuxtLink
-              :to="`/detail/${image.id}`"
+              :to="{ path: `/detail/${image.id}`, query: userId ? { user_id: userId } : undefined }"
               @click="active = image.id"
             >
-              <img
-                v-if="image && image.url"
-                width="527"
-                height="430"
-                :src="cachedImageUrls.get(image.id) || image.url"
-                :alt="`Image ${image.id}`"
-                loading="lazy"
-                :class="{ imageEl: image.id === active }"
-                class="h-auto w-full max-h-[430px] rounded-md transition-all duration-200 border-image brightness-[.8] hover:brightness-100 will-change-[filter] object-cover"
-                @load="() => loadAndCacheImage(image)"
-              >
               <div
-                v-else
-                class="h-auto w-full max-h-[430px] rounded-md bg-gray-800 flex items-center justify-center"
+                class="w-full h-[280px] md:h-auto max-h-[430px] rounded-md overflow-hidden"
               >
-                <USkeleton class="h-full w-full" />
+                <img
+                  v-if="image && image.url"
+                  width="527"
+                  height="430"
+                  :src="cachedImageUrls.get(image.id) || image.url"
+                  :alt="`Image ${image.id}`"
+                  loading="lazy"
+                  :class="{ imageEl: image.id === active }"
+                  class="h-full w-full md:h-auto transition-all duration-200 border-image brightness-100 md:brightness-[.8] md:hover:brightness-100 will-change-[filter] object-cover"
+                  @load="() => loadAndCacheImage(image)"
+                >
+                <div
+                  v-else
+                  class="h-full w-full bg-gray-800 flex items-center justify-center"
+                >
+                  <USkeleton class="h-full w-full" />
+                </div>
               </div>
             </NuxtLink>
+
+            <button
+              type="button"
+              class="absolute bottom-3 right-3 z-10 rounded-full bg-black/50 backdrop-blur px-2 py-2 hover:bg-black/70 transition flex items-center gap-1"
+              :class="[
+                goodLoadingKeys.has(image.key) ? 'opacity-70 cursor-not-allowed' : 'opacity-100',
+                goodBumpKeys.has(image.key) ? 'scale-125' : 'scale-100',
+                'transition-transform duration-150 ease-out'
+              ]"
+              :disabled="goodLoadingKeys.has(image.key)"
+              aria-label="Good"
+              @click.stop.prevent="() => incrementGood(image)"
+            >
+              <img src="/good.svg" alt="good" class="w-5 h-5">
+              <span
+                v-if="getGoodText(image)"
+                class="text-xs text-white tabular-nums"
+              >
+                {{ getGoodText(image) }}
+              </span>
+            </button>
           </li>
         </ul>
         <div
           v-else
           class="text-2xl text-white flex flex-col gap-y-4 items-center justify-center h-full w-full pb-8"
         >
-          <div v-if="imagesLoading" class="flex flex-col items-center gap-3">
-            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 text-gray-300 animate-spin" />
-            <p class="text-gray-400 text-base">
-              Loading images...
-            </p>
+          <div v-if="imagesLoading" class="w-full">
+            <ul class="grid grid-cols-1 gap-4 lg:block">
+              <li
+                v-for="item in skeletonItems"
+                :key="item"
+                class="relative w-full masonry-item"
+              >
+                <div class="h-[280px] md:h-auto max-h-[430px] w-full rounded-md bg-gray-800 overflow-hidden">
+                  <USkeleton class="h-full w-full" />
+                </div>
+              </li>
+            </ul>
           </div>
 
           <p v-else-if="imagesLoaded" class="text-gray-400">
             No images available
           </p>
 
-          <div v-else class="flex flex-col items-center gap-3">
-            <UIcon name="i-heroicons-arrow-path" class="w-8 h-8 text-gray-300 animate-spin" />
-            <p class="text-gray-400 text-base">
-              Loading images...
-            </p>
+          <div v-else class="w-full">
+            <ul class="grid grid-cols-1 gap-4 lg:block">
+              <li
+                v-for="item in skeletonItems"
+                :key="item"
+                class="relative w-full masonry-item"
+              >
+                <div class="h-[280px] md:h-auto max-h-[430px] w-full rounded-md bg-gray-800 overflow-hidden">
+                  <USkeleton class="h-full w-full" />
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
       </div>

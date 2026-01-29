@@ -24,9 +24,62 @@ const { images } = useFile()
 
 const { currentIndex, isFirstImg, isLastImg, initSwipe, magnifierImage } = useImageGallery()
 
+const isClient = typeof window !== 'undefined'
+
 const active = useState()
 const route = useRoute()
 const router = useRouter()
+
+const galleryQuery = computed(() => {
+  const raw = route.query.user_id
+  const userId = Array.isArray(raw) ? raw[0] : raw
+
+  if (typeof userId === 'string' && userId.length > 0) {
+    return { user_id: userId }
+  }
+
+  return undefined
+})
+
+const galleryTo = computed(() => ({
+  path: '/',
+  query: galleryQuery.value
+}))
+
+const prevTo = computed(() => {
+  const prev = images.value?.[currentIndex.value - 1]
+  if (prev?.id) {
+    return { path: `/detail/${prev.id}`, query: galleryQuery.value }
+  }
+  return galleryTo.value
+})
+
+const nextTo = computed(() => {
+  const next = images.value?.[currentIndex.value + 1]
+  if (next?.id) {
+    return { path: `/detail/${next.id}`, query: galleryQuery.value }
+  }
+  return galleryTo.value
+})
+
+function recordGalleryReturn() {
+  if (!isClient || !image.value) {
+    return
+  }
+
+  try {
+    sessionStorage.setItem('gallery_return_id', String(image.value.id))
+    sessionStorage.setItem('gallery_scroll_y', String(window.scrollY || 0))
+  }
+  catch {
+    // ignore storage errors
+  }
+}
+
+function handleReturnToGallery() {
+  recordGalleryReturn()
+  router.push(galleryTo.value)
+}
 
 const image: ComputedRef<ImageItem | null> = computed(() => {
   if (!route.params.slug || !route.params.slug[0]) {
@@ -57,7 +110,7 @@ watch(image, async (newImage: ImageItem | null) => {
     if (newImage.url) {
       imageUrl.value = newImage.url
     }
-    else if (newImage.key && typeof window !== 'undefined') {
+    else if (newImage.key && isClient) {
       try {
         imageUrl.value = await useCosSign(newImage.key)
         // 更新 images 数组中的 URL
@@ -74,6 +127,34 @@ watch(image, async (newImage: ImageItem | null) => {
       }
     }
   }
+}, { immediate: true })
+
+async function prefetchImageUrl(target?: ImageItem) {
+  if (!target || !target.key || target.url || !isClient) return
+
+  try {
+    const signed = await useCosSign(target.key)
+    const index = images.value?.findIndex((img: ImageItem) => img.id === target.id)
+    if (index !== undefined && index >= 0 && images.value) {
+      images.value[index] = {
+        ...images.value[index],
+        url: signed
+      }
+    }
+  }
+  catch {
+    // 静默失败，不影响滑动
+  }
+}
+
+watch(currentIndex, (idx) => {
+  if (!images.value || idx < 0) return
+
+  const prev = images.value[idx - 1]
+  const next = images.value[idx + 1]
+
+  prefetchImageUrl(prev)
+  prefetchImageUrl(next)
 }, { immediate: true })
 
 // 计算图片样式（避免 SSR 问题）
@@ -101,28 +182,30 @@ const isCurrentImage = computed(() => {
 })
 
 onKeyStroke('Escape', () => {
-  router.push('/')
+  handleReturnToGallery()
 })
 
 onKeyStroke('ArrowLeft', () => {
-  if (isFirstImg.value)
-    router.push('/')
-  else {
-    const prevImage = images.value[currentIndex.value - 1]
-    if (prevImage) {
-      router.push(`/detail/${prevImage.id}`)
-    }
+  if (isFirstImg.value) {
+    handleReturnToGallery()
+    return
+  }
+
+  const prev = images.value?.[currentIndex.value - 1]
+  if (prev?.id) {
+    router.push({ path: `/detail/${prev.id}`, query: galleryQuery.value })
   }
 })
 
 onKeyStroke('ArrowRight', () => {
-  if (isLastImg.value)
-    router.push('/')
-  else {
-    const nextImage = images.value[currentIndex.value + 1]
-    if (nextImage) {
-      router.push(`/detail/${nextImage.id}`)
-    }
+  if (isLastImg.value) {
+    handleReturnToGallery()
+    return
+  }
+
+  const next = images.value?.[currentIndex.value + 1]
+  if (next?.id) {
+    router.push({ path: `/detail/${next.id}`, query: galleryQuery.value })
   }
 })
 
@@ -237,16 +320,17 @@ onMounted(() => {
               text="Previous"
               :shortcuts="['←']"
             >
-              <UButton
-                variant="ghost"
-                color="gray"
-                :to="(() => { const prev = images?.[currentIndex - 1]; return prev?.id ? `/detail/${prev.id}` : '/'; })()"
-                size="lg"
-                icon="i-heroicons-chevron-left"
-                class="hidden md:flex ml-4"
-                aria-label="Go to previous image"
-                @click="active = image.id"
-              />
+                <UButton
+                  variant="ghost"
+                  color="gray"
+                  :to="prevTo"
+                  size="lg"
+                  icon="i-heroicons-chevron-left"
+                  class="hidden md:flex ml-4"
+                  aria-label="Go to previous image"
+                  @click="active = image.id"
+                />
+
             </UTooltip>
 
             <div
@@ -259,13 +343,13 @@ onMounted(() => {
                 :shortcuts="['Esc']"
               >
                 <UButton
-                  to="/"
+                  :to="galleryTo"
                   size="xl"
                   color="gray"
                   variant="ghost"
                   class="back hidden md:flex ml-4 transition-colors duration-200"
                   aria-label="Back"
-                  @click="active = image.id"
+                  @click="() => { active = image.id; recordGalleryReturn() }"
                 >
                   <UIcon
                     name="i-heroicons-rectangle-group-20-solid"
@@ -287,6 +371,7 @@ onMounted(() => {
                     class="rounded object-contain transition-all duration-200 block"
                     :class="[{ imageEl: isCurrentImage }, filter ? 'w-[80%] ml-[12px]' : 'w-full']"
                     :style="imageStyle"
+                    @click="handleReturnToGallery"
                     @mousemove="magnifier && imageContainer && imageEl && magnifierEl ? magnifierImage($event, imageContainer, imageEl, magnifierEl, zoomFactor) : () => {}"
                   >
                   <div
@@ -311,16 +396,17 @@ onMounted(() => {
               text="Next"
               :shortcuts="['→']"
             >
-              <UButton
-                variant="ghost"
-                color="gray"
-                :to="(() => { const next = images?.[currentIndex + 1]; return next?.id ? `/detail/${next.id}` : '/'; })()"
-                size="lg"
-                icon="i-heroicons-chevron-right"
-                class="hidden md:flex mr-4 rounded-full"
-                aria-label="Go to next image"
-                @click="active = image.id"
-              />
+                <UButton
+                  variant="ghost"
+                  color="gray"
+                  :to="nextTo"
+                  size="lg"
+                  icon="i-heroicons-chevron-right"
+                  class="hidden md:flex mr-4 rounded-full"
+                  aria-label="Go to next image"
+                  @click="active = image.id"
+                />
+
             </UTooltip>
 
             <!-- back to gallery if last image -->
@@ -333,11 +419,11 @@ onMounted(() => {
                 <UButton
                   variant="ghost"
                   color="gray"
-                  to="/"
+                  :to="galleryTo"
                   size="xl"
                   class="back hidden md:flex mr-4 transition-colors duration-200"
                   aria-label="Back"
-                  @click="active = image.id"
+                  @click="() => { active = image.id; recordGalleryReturn() }"
                 >
                   <UIcon
                     name="i-heroicons-rectangle-group-20-solid"
@@ -359,7 +445,7 @@ onMounted(() => {
       </div>
       <div v-else class="space-y-4">
         <p class="text-white text-xl">图片未找到</p>
-        <UButton to="/" color="primary" variant="outline">
+        <UButton :to="galleryTo" color="primary" variant="outline">
           返回图库
         </UButton>
       </div>

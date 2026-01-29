@@ -10,6 +10,16 @@ const props = defineProps<{
 const route = useRoute()
 const thumbnailUrl = ref<string | undefined>(props.thumbnail.url)
 
+const detailTo = computed(() => {
+  const raw = route.query.user_id
+  const userId = Array.isArray(raw) ? raw[0] : raw
+
+  return {
+    path: `/detail/${encodeImageSlug(props.thumbnail.id)}`,
+    query: typeof userId === 'string' && userId.length > 0 ? { user_id: userId } : undefined
+  }
+})
+
 // 如果还没有签名 URL，获取它
 if (typeof window !== 'undefined' && !thumbnailUrl.value && props.thumbnail.key) {
   useCosSign(props.thumbnail.key).then((url) => {
@@ -33,7 +43,7 @@ function isCurrentImage(imageId: string) {
     class="text-black inline-block relative"
     :class="{ 'z-50': isCurrentImage(thumbnail.id) }"
   >
-    <NuxtLink :to="`/detail/${encodeImageSlug(thumbnail.id)}`">
+    <NuxtLink :to="detailTo">
       <img
         v-if="thumbnailUrl"
         width="83"

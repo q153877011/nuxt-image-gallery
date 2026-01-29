@@ -14,7 +14,7 @@ useHead({
     class="bg-black min-h-[100dvh] overflow-x-auto relative"
     :class="{ 'flex flex-col md:block': $router.currentRoute.value.fullPath !== '/' && $router.currentRoute.value.fullPath !== '/gate' }"
   >
-    <NuxtPage />
+    <NuxtPage keepalive />
 
     <ImageThumbnailList
       v-if="$router.currentRoute.value.fullPath !== '/gate'"
