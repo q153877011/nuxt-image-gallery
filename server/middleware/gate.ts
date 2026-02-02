@@ -8,7 +8,9 @@ function setGateCookies(event: Parameters<typeof defineEventHandler>[0], userId:
   const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict' as const,
+    // 允许从微信/外部站点点击进入时的顶层跳转携带 cookie
+    // strict 会导致首次进入后的 302 清理 token 时 cookie 不一定会被带上
+    sameSite: 'lax' as const,
     path: '/',
     maxAge: 60 * 60 * 24
   }
