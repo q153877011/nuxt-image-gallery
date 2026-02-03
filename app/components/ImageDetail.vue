@@ -63,12 +63,19 @@ const nextTo = computed(() => {
 })
 
 function recordGalleryReturn() {
-  if (!isClient || !image.value) {
+  if (!isClient) {
+    return
+  }
+
+  // 退出详情时应该定位到“当前路由这张图”，不要依赖 image.value（它可能因为列表未就绪而为 null）
+  const slug = route.params.slug
+  const currentId = Array.isArray(slug) && slug[0] ? String(slug[0]) : null
+  if (!currentId) {
     return
   }
 
   try {
-    sessionStorage.setItem('gallery_return_id', String(image.value.id))
+    sessionStorage.setItem('gallery_return_id', currentId)
     sessionStorage.setItem('gallery_scroll_y', String(window.scrollY || 0))
   }
   catch {
@@ -106,8 +113,16 @@ const image: ComputedRef<ImageItem | null> = computed(() => {
 const imageUrl = ref<string | undefined>(undefined)
 const imageLoaded = ref(false)
 
-watch(imageUrl, () => {
+watch(imageUrl, async () => {
   imageLoaded.value = false
+  if (!isClient) return
+
+  // 如果图片已经在缓存/预加载里，@load 可能会非常快触发甚至错过，
+  // 这里在下一帧检查一次 complete，避免出现“图片有了但一直 opacity-0”
+  await nextTick()
+  if (imageEl.value && imageEl.value.complete && imageEl.value.naturalWidth > 0) {
+    imageLoaded.value = true
+  }
 })
 
 // 预加载（真正发起图片请求），避免滑动后才开始下载下一张
@@ -149,7 +164,11 @@ function preloadImageUrl(url: string) {
   preloadedImages.value.set(url, img)
 }
 
+let imageWatchToken = 0
+
 watch(image, async (newImage: ImageItem | null) => {
+  const token = ++imageWatchToken
+
   if (!newImage) {
     imageUrl.value = undefined
     imageLoaded.value = false
@@ -159,6 +178,11 @@ watch(image, async (newImage: ImageItem | null) => {
   // 路由切换后先立刻清掉旧图 + 重置 transform，避免“弹回旧图等加载”
   imageUrl.value = newImage.url || undefined
   imageLoaded.value = false
+
+  // 如果已有 url，也主动预加载/解码一下，避免回滑时出现空白
+  if (imageUrl.value) {
+    preloadImageUrl(imageUrl.value)
+  }
   if (isClient && imageEl.value) {
     imageEl.value.style.transition = 'none'
     imageEl.value.style.transform = 'translate3d(0px, 0, 0)'
@@ -170,8 +194,13 @@ watch(image, async (newImage: ImageItem | null) => {
 
     try {
       const signed = await useCosSign(newImage.key)
+      if (token !== imageWatchToken) return
+
       imageUrl.value = signed
       imageLoaded.value = false
+
+      // 拿到签名后立刻开始预加载当前图，减少首帧空窗
+      preloadImageUrl(signed)
 
       // 更新 images 数组中的 URL
       const index = images.value?.findIndex((img: ImageItem) => img.id === newImage.id)
