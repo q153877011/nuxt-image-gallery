@@ -225,8 +225,24 @@ watch([contrast, blur, invert, saturate, hueRotate, sepia], () => {
   filterUpdated.value = true
 })
 
+let stopSwipe: (() => void) | null = null
+
+function handleImageTap() {
+  // 如果刚刚发生过滑动（pointer handler 标记），不要触发“点图返回”
+  if (imageEl.value?.dataset.swiping === '1') {
+    return
+  }
+  handleReturnToGallery()
+}
+
 onMounted(() => {
-  initSwipe(imageEl)
+  // 绑定更丝滑的滑动手势
+  stopSwipe = initSwipe(imageEl as unknown as Ref<HTMLElement | undefined>)
+})
+
+onUnmounted(() => {
+  stopSwipe?.()
+  stopSwipe = null
 })
 </script>
 
@@ -368,10 +384,11 @@ onMounted(() => {
                     ref="imageEl"
                     :src="imageUrl"
                     :alt="image.id"
-                    class="rounded object-contain transition-all duration-200 block"
+                    class="rounded object-contain transition-[transform,filter] duration-200 block will-change-transform select-none touch-pan-y"
                     :class="[{ imageEl: isCurrentImage }, filter ? 'w-[80%] ml-[12px]' : 'w-full']"
                     :style="imageStyle"
-                    @click="handleReturnToGallery"
+                    draggable="false"
+                    @click="handleImageTap"
                     @mousemove="magnifier && imageContainer && imageEl && magnifierEl ? magnifierImage($event, imageContainer, imageEl, magnifierEl, zoomFactor) : () => {}"
                   >
                   <div
