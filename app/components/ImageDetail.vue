@@ -25,6 +25,8 @@ const { images } = useFile()
 const { currentIndex, isFirstImg, isLastImg, initSwipe, magnifierImage } = useImageGallery()
 
 const isClient = typeof window !== 'undefined'
+const { width } = useWindowSize()
+const isMobile = computed(() => width.value < 768)
 
 const active = useState()
 const route = useRoute()
@@ -67,16 +69,29 @@ function recordGalleryReturn() {
     return
   }
 
-  // 退出详情时应该定位到“当前路由这张图”，不要依赖 image.value（它可能因为列表未就绪而为 null）
+  // 默认：定位到“退出时这张图”
   const slug = route.params.slug
   const currentId = Array.isArray(slug) && slug[0] ? String(slug[0]) : null
   if (!currentId) {
     return
   }
 
+  // 移动端：更符合预期的是回到“进入详情时的位置”
+  let returnId = currentId
+  if (isMobile.value) {
+    try {
+      const entryId = sessionStorage.getItem('gallery_entry_id')
+      if (entryId) {
+        returnId = entryId
+      }
+    }
+    catch {
+      // ignore
+    }
+  }
+
   try {
-    sessionStorage.setItem('gallery_return_id', currentId)
-    sessionStorage.setItem('gallery_scroll_y', String(window.scrollY || 0))
+    sessionStorage.setItem('gallery_return_id', returnId)
   }
   catch {
     // ignore storage errors
@@ -84,6 +99,21 @@ function recordGalleryReturn() {
 }
 
 function handleReturnToGallery() {
+  // 如果是从站内路由跳转进来的，优先 back，这样浏览器/路由能自动恢复滚动位置
+  if (isClient) {
+    try {
+      const back = (window.history.state as { back?: unknown } | null)?.back
+      if (typeof back === 'string' && back.startsWith('/')) {
+        router.back()
+        return
+      }
+    }
+    catch {
+      // ignore
+    }
+  }
+
+  // 没有可用的 back（比如直链打开）：走显式 push + 列表页自恢复
   recordGalleryReturn()
   router.push(galleryTo.value)
 }
@@ -339,7 +369,12 @@ function handleImageTap() {
 }
 
 onMounted(() => {
-  // 绑定更丝滑的滑动手势
+  // 移动端：纯看图模式（不允许左右滑动切换），只保留点击退出
+  if (isMobile.value) {
+    return
+  }
+
+  // 桌面端：绑定更丝滑的滑动手势
   stopSwipe = initSwipe(imageEl as unknown as Ref<HTMLElement | undefined>)
 })
 

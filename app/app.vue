@@ -7,6 +7,19 @@ useHead({
     lang: 'en'
   }
 })
+
+const route = useRoute()
+const { width } = useWindowSize()
+
+const isMobile = computed(() => width.value < 768)
+const isDetailRoute = computed(() => route.path.startsWith('/detail/'))
+
+const showThumbnailList = computed(() => {
+  if (route.path === '/gate') return false
+  // 移动端详情页：纯看图模式，不显示顶部缩略图导航
+  if (isMobile.value && isDetailRoute.value) return false
+  return true
+})
 </script>
 
 <template>
@@ -17,7 +30,7 @@ useHead({
     <NuxtPage keepalive />
 
     <ImageThumbnailList
-      v-if="$router.currentRoute.value.fullPath !== '/gate'"
+      v-if="showThumbnailList"
       :class="$router.currentRoute.value.fullPath !== '/' ? 'opacity-100 z-[9999]' : 'opacity-0 z-[-1]'"
     />
   </UApp>

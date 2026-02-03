@@ -199,29 +199,96 @@ watch(signedImages, (newImages: ImageItem[]) => {
 // 加载中时展示的骨架数量
 const skeletonItems = computed(() => Array.from({ length: 12 }, (_, i) => i))
 
+function recordGalleryEntry(imageId: string) {
+  if (typeof window === 'undefined') return
+  if (!imageId) return
+
+  try {
+    sessionStorage.setItem('gallery_entry_id', String(imageId))
+    sessionStorage.setItem('gallery_entry_scroll_y', String(window.scrollY || 0))
+  }
+  catch {
+    // ignore storage errors
+  }
+}
+
 function tryRestoreScrollPosition() {
   if (typeof window === 'undefined') return
 
   let targetId: string | null = null
+  let targetScrollY: number | null = null
+
   try {
     targetId = sessionStorage.getItem('gallery_return_id')
+
+    const rawY = sessionStorage.getItem('gallery_entry_scroll_y')
+    if (rawY && !Number.isNaN(Number(rawY))) {
+      targetScrollY = Number(rawY)
+    }
   }
   catch {
     return
   }
 
-  if (!targetId) return
+  if (!targetId && targetScrollY === null) return
 
-  const el = document.querySelector(`[data-image-id="${targetId}"]`) as HTMLElement | null
-  if (el) {
-    el.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior })
-    sessionStorage.removeItem('gallery_return_id')
-    sessionStorage.removeItem('gallery_scroll_y')
+  const clearKeys = () => {
+    try {
+      sessionStorage.removeItem('gallery_return_id')
+      sessionStorage.removeItem('gallery_entry_id')
+      sessionStorage.removeItem('gallery_entry_scroll_y')
+    }
+    catch {
+      // ignore
+    }
   }
+
+  // 在 Nuxt 的 scrollBehavior 之后再恢复，避免被“回到顶部”覆盖
+  let attempts = 0
+  const maxAttempts = 12
+
+  const run = () => {
+    // 1) 优先按 id 精确定位
+    if (targetId) {
+      const el = document.querySelector(`[data-image-id="${targetId}"]`) as HTMLElement | null
+      if (el) {
+        el.scrollIntoView({ block: 'center', behavior: 'auto' })
+        clearKeys()
+        return
+      }
+
+      // 2) 降级：如果有进入时的 scrollY，就先恢复到大致位置
+      if (targetScrollY !== null) {
+        window.scrollTo({ top: targetScrollY, left: 0, behavior: 'auto' })
+        clearKeys()
+        return
+      }
+
+      // 3) 既没有元素也没有 scrollY，就重试几帧（等列表渲染出来）
+      if (attempts++ < maxAttempts) {
+        requestAnimationFrame(run)
+      }
+      else {
+        clearKeys()
+      }
+
+      return
+    }
+
+    // 只有 scrollY 的情况
+    if (targetScrollY !== null) {
+      window.scrollTo({ top: targetScrollY, left: 0, behavior: 'auto' })
+      clearKeys()
+    }
+  }
+
+  requestAnimationFrame(() => requestAnimationFrame(run))
 }
 
-watch(signedImages, async () => {
+watch(signedImages, async (newImages) => {
   if (typeof window === 'undefined') return
+  if (!newImages || newImages.length === 0) return
+
   await nextTick()
   tryRestoreScrollPosition()
   setupViewObserver()
@@ -229,6 +296,8 @@ watch(signedImages, async () => {
 
 onActivated(async () => {
   if (typeof window === 'undefined') return
+  if (!signedImages.value || signedImages.value.length === 0) return
+
   await nextTick()
   tryRestoreScrollPosition()
   setupViewObserver()
@@ -275,10 +344,10 @@ onUnmounted(() => {
           >
             <NuxtLink
               :to="{ path: `/detail/${image.id}`, query: userId ? { user_id: userId } : undefined }"
-              @click="active = image.id"
+              @click="() => { recordGalleryEntry(String(image.id)); active = image.id }"
             >
               <div
-                class="w-full h-[280px] md:h-auto max-h-[430px] rounded-md overflow-hidden"
+                class="w-full min-h-[100px] h-auto md:h-auto max-h-[430px] rounded-md overflow-hidden"
               >
                 <img
                   v-if="image && image.url"
@@ -288,7 +357,7 @@ onUnmounted(() => {
                   :alt="`Image ${image.id}`"
                   loading="lazy"
                   :class="{ imageEl: image.id === active }"
-                  class="h-full w-full md:h-auto transition-all duration-200 border-image brightness-100 md:brightness-[.8] md:hover:brightness-100 will-change-[filter] object-cover"
+                  class="w-full h-auto md:h-auto transition-all duration-200 border-image brightness-100 md:brightness-[.8] md:hover:brightness-100 will-change-[filter] object-contain md:object-cover"
                   @load="() => loadAndCacheImage(image)"
                 >
                 <div
@@ -333,8 +402,8 @@ onUnmounted(() => {
                 :key="item"
                 class="relative w-full masonry-item"
               >
-                <div class="h-[280px] md:h-auto max-h-[430px] w-full rounded-md bg-gray-800 overflow-hidden">
-                  <USkeleton class="h-full w-full" />
+                <div class="min-h-[100px] h-auto md:h-auto max-h-[430px] w-full rounded-md bg-gray-800 overflow-hidden">
+                  <USkeleton class="min-h-[100px] h-full w-full" />
                 </div>
               </li>
             </ul>
@@ -351,8 +420,8 @@ onUnmounted(() => {
                 :key="item"
                 class="relative w-full masonry-item"
               >
-                <div class="h-[280px] md:h-auto max-h-[430px] w-full rounded-md bg-gray-800 overflow-hidden">
-                  <USkeleton class="h-full w-full" />
+                <div class="min-h-[100px] h-auto md:h-auto max-h-[430px] w-full rounded-md bg-gray-800 overflow-hidden">
+                  <USkeleton class="min-h-[100px] h-full w-full" />
                 </div>
               </li>
             </ul>
