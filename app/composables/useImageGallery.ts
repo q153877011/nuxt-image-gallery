@@ -173,30 +173,46 @@ export function useImageGallery () {
       }
 
       const x = deltaX
-      resetTransform()
 
       const current = currentIndex.value
       if (Math.abs(x) < THRESHOLD_PX) {
+        resetTransform()
         pointerId = null
         return
       }
 
-      if (x < 0) {
-        if (isLastImg.value) {
-          navigateToGallery()
+      // 不要“弹回去等下一张加载”，而是直接滑出并马上切路由
+      markSwiping()
+
+      const w = (typeof window !== 'undefined' ? window.innerWidth : 0) || target.clientWidth || 400
+      const flyOutX = x < 0 ? -w : w
+
+      if (raf) {
+        window.cancelAnimationFrame(raf)
+        raf = 0
+      }
+
+      target.style.transition = 'transform 140ms ease-out'
+      target.style.transform = `translate3d(${flyOutX}px, 0, 0)`
+
+      window.setTimeout(() => {
+        if (x < 0) {
+          if (isLastImg.value) {
+            navigateToGallery()
+          }
+          else {
+            navigateToImage(current + 1)
+          }
         }
         else {
-          navigateToImage(current + 1)
+          if (isFirstImg.value) {
+            navigateToGallery()
+          }
+          else {
+            navigateToImage(current - 1)
+          }
         }
-      }
-      else {
-        if (isFirstImg.value) {
-          navigateToGallery()
-        }
-        else {
-          navigateToImage(current - 1)
-        }
-      }
+      }, 120)
 
       pointerId = null
     }

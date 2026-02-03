@@ -104,42 +104,111 @@ const image: ComputedRef<ImageItem | null> = computed(() => {
 
 // 确保图片有签名 URL
 const imageUrl = ref<string | undefined>(undefined)
+const imageLoaded = ref(false)
+
+watch(imageUrl, () => {
+  imageLoaded.value = false
+})
+
+// 预加载（真正发起图片请求），避免滑动后才开始下载下一张
+const preloadedImages = ref<Map<string, HTMLImageElement>>(new Map())
+
+function schedulePrefetch(fn: () => void) {
+  if (!isClient) return
+
+  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback
+  if (ric) {
+    ric(fn, { timeout: 600 })
+  }
+  else {
+    window.setTimeout(fn, 0)
+  }
+}
+
+function preloadImageUrl(url: string) {
+  if (!isClient || !url) return
+  if (preloadedImages.value.has(url)) return
+
+  const img = new Image()
+  img.decoding = 'async'
+  ;(img as unknown as { loading?: string }).loading = 'eager'
+
+  const cleanup = () => {
+    preloadedImages.value.delete(url)
+  }
+
+  img.onload = cleanup
+  img.onerror = cleanup
+
+  // 赋值后立即开始请求
+  img.src = url
+
+  // 尝试提前解码，减少切换时首帧卡顿（不支持时忽略）
+  img.decode?.().catch(() => {})
+
+  preloadedImages.value.set(url, img)
+}
 
 watch(image, async (newImage: ImageItem | null) => {
-  if (newImage) {
-    if (newImage.url) {
-      imageUrl.value = newImage.url
-    }
-    else if (newImage.key && isClient) {
-      try {
-        imageUrl.value = await useCosSign(newImage.key)
-        // 更新 images 数组中的 URL
-        const index = images.value?.findIndex((img: ImageItem) => img.id === newImage.id)
-        if (index !== undefined && index >= 0 && images.value) {
-          images.value[index] = {
-            ...newImage,
-            url: imageUrl.value
-          }
+  if (!newImage) {
+    imageUrl.value = undefined
+    imageLoaded.value = false
+    return
+  }
+
+  // 路由切换后先立刻清掉旧图 + 重置 transform，避免“弹回旧图等加载”
+  imageUrl.value = newImage.url || undefined
+  imageLoaded.value = false
+  if (isClient && imageEl.value) {
+    imageEl.value.style.transition = 'none'
+    imageEl.value.style.transform = 'translate3d(0px, 0, 0)'
+  }
+
+  if (!newImage.url && newImage.key && isClient) {
+    // 没有预签名时：显示 skeleton，同时异步拿签名
+    imageUrl.value = undefined
+
+    try {
+      const signed = await useCosSign(newImage.key)
+      imageUrl.value = signed
+      imageLoaded.value = false
+
+      // 更新 images 数组中的 URL
+      const index = images.value?.findIndex((img: ImageItem) => img.id === newImage.id)
+      if (index !== undefined && index >= 0 && images.value) {
+        images.value[index] = {
+          ...newImage,
+          url: signed
         }
       }
-      catch (error) {
-        console.error(`Failed to sign image ${newImage.key}:`, error)
-      }
+    }
+    catch (error) {
+      console.error(`Failed to sign image ${newImage.key}:`, error)
     }
   }
 }, { immediate: true })
 
-async function prefetchImageUrl(target?: ImageItem) {
-  if (!target || !target.key || target.url || !isClient) return
+async function prefetchImage(target?: ImageItem) {
+  if (!target || !target.key || !isClient) return
 
   try {
-    const signed = await useCosSign(target.key)
-    const index = images.value?.findIndex((img: ImageItem) => img.id === target.id)
-    if (index !== undefined && index >= 0 && images.value) {
-      images.value[index] = {
-        ...images.value[index],
-        url: signed
+    let url = target.url
+
+    // 1) 先保证有签名 URL（有了 URL 才能真正预加载资源）
+    if (!url) {
+      url = await useCosSign(target.key)
+      const index = images.value?.findIndex((img: ImageItem) => img.id === target.id)
+      if (index !== undefined && index >= 0 && images.value) {
+        images.value[index] = {
+          ...images.value[index],
+          url
+        }
       }
+    }
+
+    // 2) 再真正预加载图片资源（发起请求）
+    if (url) {
+      schedulePrefetch(() => preloadImageUrl(url!))
     }
   }
   catch {
@@ -150,11 +219,16 @@ async function prefetchImageUrl(target?: ImageItem) {
 watch(currentIndex, (idx) => {
   if (!images.value || idx < 0) return
 
+  // 预取更多一层，尽量保证滑动后能“秒切”不等签名
   const prev = images.value[idx - 1]
   const next = images.value[idx + 1]
+  const prev2 = images.value[idx - 2]
+  const next2 = images.value[idx + 2]
 
-  prefetchImageUrl(prev)
-  prefetchImageUrl(next)
+  prefetchImage(prev)
+  prefetchImage(next)
+  prefetchImage(prev2)
+  prefetchImage(next2)
 }, { immediate: true })
 
 // 计算图片样式（避免 SSR 问题）
@@ -243,6 +317,9 @@ onMounted(() => {
 onUnmounted(() => {
   stopSwipe?.()
   stopSwipe = null
+
+  // 释放预加载引用（不强制中断请求，但避免长期占用内存）
+  preloadedImages.value.clear()
 })
 </script>
 
@@ -379,24 +456,39 @@ onUnmounted(() => {
             <div class="relative flex items-center justify-center xl:m-16">
               <div ref="imageContainer">
                 <div class="group">
-                  <img
-                    v-if="image && imageUrl"
-                    ref="imageEl"
-                    :src="imageUrl"
-                    :alt="image.id"
-                    class="rounded object-contain transition-[transform,filter] duration-200 block will-change-transform select-none touch-pan-y"
-                    :class="[{ imageEl: isCurrentImage }, filter ? 'w-[80%] ml-[12px]' : 'w-full']"
-                    :style="imageStyle"
-                    draggable="false"
-                    @click="handleImageTap"
-                    @mousemove="magnifier && imageContainer && imageEl && magnifierEl ? magnifierImage($event, imageContainer, imageEl, magnifierEl, zoomFactor) : () => {}"
-                  >
                   <div
-                    v-else-if="image"
-                    class="w-full h-[60vh] flex items-center justify-center bg-gray-800 rounded"
+                    v-if="image"
+                    class="relative w-full h-[60vh] flex items-center justify-center rounded overflow-hidden bg-transparent"
                   >
-                    <USkeleton class="h-full w-full" />
+                    <div
+                      v-if="!imageUrl || !imageLoaded"
+                      class="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    >
+                      <div
+                        class="w-8 h-8 rounded-full border-2 border-white/20 border-t-white/70 animate-spin"
+                        aria-label="Loading"
+                      />
+                    </div>
+
+                    <img
+                      v-if="imageUrl"
+                      ref="imageEl"
+                      :src="imageUrl"
+                      :alt="image.id"
+                      class="rounded object-contain transition-[transform,filter,opacity] duration-200 block will-change-transform select-none touch-pan-y"
+                      :class="[
+                        { imageEl: isCurrentImage },
+                        filter ? 'w-[80%] ml-[12px]' : 'w-full',
+                        imageLoaded ? 'opacity-100' : 'opacity-0'
+                      ]"
+                      :style="imageStyle"
+                      draggable="false"
+                      @load="imageLoaded = true"
+                      @click="handleImageTap"
+                      @mousemove="magnifier && imageContainer && imageEl && magnifierEl ? magnifierImage($event, imageContainer, imageEl, magnifierEl, zoomFactor) : () => {}"
+                    >
                   </div>
+
                   <div
                     v-if="magnifier && imageUrl"
                     ref="magnifierEl"
