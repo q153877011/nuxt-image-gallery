@@ -16,8 +16,6 @@ const isDetailRoute = computed(() => route.path.startsWith('/detail/'))
 
 const showThumbnailList = computed(() => {
   if (route.path === '/gate') return false
-  // 移动端详情页：纯看图模式，不显示顶部缩略图导航
-  if (isMobile.value && isDetailRoute.value) return false
   return true
 })
 </script>
@@ -25,13 +23,13 @@ const showThumbnailList = computed(() => {
 <template>
   <UApp
     class="bg-black min-h-[100dvh] overflow-x-auto relative"
-    :class="{ 'flex flex-col md:block': $router.currentRoute.value.fullPath !== '/' && $router.currentRoute.value.fullPath !== '/gate' }"
+    :class="{ 'flex flex-col md:block': route.path !== '/' && route.path !== '/gate' }"
   >
     <NuxtPage keepalive />
 
     <ImageThumbnailList
       v-if="showThumbnailList"
-      :class="$router.currentRoute.value.fullPath !== '/' ? 'opacity-100 z-[9999]' : 'opacity-0 z-[-1]'"
+      :class="route.path !== '/' ? 'opacity-100 z-[9999]' : 'opacity-0 z-[-1]'"
     />
   </UApp>
 </template>
