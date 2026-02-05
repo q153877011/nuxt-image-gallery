@@ -4,6 +4,34 @@ function normalizeExpiryMs(expaired: number): number {
   return expaired < 1_000_000_000_000 ? expaired * 1000 : expaired
 }
 
+function parseExpiryMs(expaired: unknown): number | null {
+  if (expaired === null || expaired === undefined) return null
+
+  let n: number
+  if (typeof expaired === 'number') {
+    n = expaired
+  }
+  else if (typeof expaired === 'string') {
+    const s = expaired.trim()
+    if (!s) return null
+
+    if (/^\d+$/.test(s)) {
+      n = Number(s)
+    }
+    else {
+      const t = Date.parse(s)
+      if (!Number.isFinite(t)) return null
+      n = t
+    }
+  }
+  else {
+    return null
+  }
+
+  if (!Number.isFinite(n)) return null
+  return normalizeExpiryMs(n)
+}
+
 function setGateCookies(event: Parameters<typeof defineEventHandler>[0], userId: string) {
   const cookieOptions = {
     httpOnly: true,
@@ -19,7 +47,18 @@ function setGateCookies(event: Parameters<typeof defineEventHandler>[0], userId:
   setCookie(event, 'gate_user_id', userId, cookieOptions)
 }
 
-async function validateTokenAndGetUserId(token: string): Promise<string | null> {
+function normalizeToken(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  // 一些设备/渠道会把 query 里的 `+` 解析成空格，这里做兜底
+  return trimmed.replace(/\s+/g, '+')
+}
+
+async function validateTokenAndGetUserId(rawToken: string): Promise<string | null> {
+  const token = normalizeToken(rawToken)
+  if (!token) return null
+
   const supabase = getSupabaseServerClient()
 
   const { data, error } = await supabase
@@ -28,19 +67,40 @@ async function validateTokenAndGetUserId(token: string): Promise<string | null> 
     .eq('token', token)
     .limit(1)
     .maybeSingle()
-  
-    console.log('data', data)
 
   if (error || !data) return null
 
   const type = (data.type || '').toString()
 
   if (type === 'cnt') {
-    if (data.used) return null
+    const expiresAtSec = Math.floor(Date.now() / 1000) + 60 * 60 * 24
+
+    // 已领取：允许在 24h 内幂等通过（多设备/重复打开）
+    if (data.used) {
+      if (data.user_id === null || data.user_id === undefined) return null
+
+      if (data.expaired === null || data.expaired === undefined) {
+        await supabase
+          .from('tokens')
+          .update({ expaired: expiresAtSec })
+          .eq('id', data.id)
+      }
+      else {
+        const exp = parseExpiryMs(data.expaired)
+        if (!(exp && exp > Date.now())) return null
+      }
+
+      return String(data.user_id)
+    }
+
+    const updatePayload: Record<string, unknown> = { used: true }
+    if (data.expaired === null || data.expaired === undefined) {
+      updatePayload.expaired = expiresAtSec
+    }
 
     const { data: redeemed, error: redeemError } = await supabase
       .from('tokens')
-      .update({ used: true })
+      .update(updatePayload)
       .eq('id', data.id)
       .select('user_id')
       .maybeSingle()
@@ -54,8 +114,8 @@ async function validateTokenAndGetUserId(token: string): Promise<string | null> 
 
   if (data.expaired === null || data.expaired === undefined) return null
 
-  const exp = normalizeExpiryMs(Number(data.expaired))
-  if (!(exp > Date.now())) return null
+  const exp = parseExpiryMs(data.expaired)
+  if (!(exp && exp > Date.now())) return null
 
   return String(data.user_id)
 }
@@ -93,8 +153,8 @@ export default defineEventHandler(async (event) => {
 
   // 无会话但 URL 带 token：在服务端直接校验并下发 HttpOnly cookie，然后重定向清理 token
   const token = url.searchParams.get('token')
-  if (token && token.trim().length > 0) {
-    const userId = await validateTokenAndGetUserId(token.trim())
+  if (token && normalizeToken(token)) {
+    const userId = await validateTokenAndGetUserId(token)
     if (!userId) {
       return sendRedirect(event, '/gate', 302)
     }

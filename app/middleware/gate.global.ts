@@ -9,7 +9,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return
   }
 
-  const token = typeof to.query.token === 'string' ? to.query.token : undefined
+  function normalizeToken(raw: unknown): string {
+    if (typeof raw !== 'string') return ''
+    const trimmed = raw.trim()
+    if (!trimmed) return ''
+    // 兼容：部分设备/分享渠道会把 `+` 解析成空格
+    return trimmed.replace(/\s+/g, '+')
+  }
+
+  const tokenRaw = typeof to.query.token === 'string' ? to.query.token : undefined
+  const token = tokenRaw ? normalizeToken(tokenRaw) : ''
 
   async function getGateSession(): Promise<{ verified: boolean, user_id?: string }> {
     try {
