@@ -5,6 +5,7 @@ import { useCosSign } from '../composables/useCosSign'
 const imageEl = ref<HTMLImageElement>()
 const magnifierEl = ref<HTMLElement>()
 const imageContainer = ref<HTMLElement>()
+const swipeContainer = ref<HTMLElement>()
 
 // filter
 const filter = ref(false)
@@ -69,14 +70,14 @@ function recordGalleryReturn() {
     return
   }
 
-  // 默认：定位到“退出时这张图”
+  // 默认：定位到"退出时这张图"
   const slug = route.params.slug
   const currentId = Array.isArray(slug) && slug[0] ? String(slug[0]) : null
   if (!currentId) {
     return
   }
 
-  // 移动端：更符合预期的是回到“进入详情时的位置”
+  // 移动端：更符合预期的是回到"进入详情时的位置"
   let returnId = currentId
   if (isMobile.value) {
     try {
@@ -135,7 +136,7 @@ watch(imageUrl, async () => {
   if (!isClient) return
 
   // 如果图片已经在缓存/预加载里，@load 可能会非常快触发甚至错过，
-  // 这里在下一帧检查一次 complete，避免出现“图片有了但一直 opacity-0”
+  // 这里在下一帧检查一次 complete，避免出现"图片有了但一直 opacity-0"
   await nextTick()
   if (imageEl.value && imageEl.value.complete && imageEl.value.naturalWidth > 0) {
     imageLoaded.value = true
@@ -192,7 +193,7 @@ watch(image, async (newImage: ImageItem | null) => {
     return
   }
 
-  // 路由切换后先立刻清掉旧图 + 重置 transform，避免“弹回旧图等加载”
+  // 路由切换后先立刻清掉旧图 + 重置 transform，避免"弹回旧图等加载"
   imageUrl.value = newImage.url || undefined
   imageLoaded.value = false
 
@@ -200,9 +201,9 @@ watch(image, async (newImage: ImageItem | null) => {
   if (imageUrl.value) {
     preloadImageUrl(imageUrl.value)
   }
-  if (isClient && imageEl.value) {
-    imageEl.value.style.transition = 'none'
-    imageEl.value.style.transform = 'translate3d(0px, 0, 0)'
+  if (isClient && swipeContainer.value) {
+    swipeContainer.value.style.transition = 'none'
+    swipeContainer.value.style.transform = 'translate3d(0px, 0, 0)'
   }
 
   if (!newImage.url && newImage.key && isClient) {
@@ -265,7 +266,7 @@ async function prefetchImage(target?: ImageItem) {
 watch(currentIndex, (idx) => {
   if (!images.value || idx < 0) return
 
-  // 预取更多一层，尽量保证滑动后能“秒切”不等签名
+  // 预取更多一层，尽量保证滑动后能"秒切"不等签名
   const prev = images.value[idx - 1]
   const next = images.value[idx + 1]
   const prev2 = images.value[idx - 2]
@@ -348,16 +349,16 @@ watch([contrast, blur, invert, saturate, hueRotate, sepia], () => {
 let stopSwipe: (() => void) | null = null
 
 function handleImageTap() {
-  // 如果刚刚发生过滑动（pointer handler 标记），不要触发“点图返回”
-  if (imageEl.value?.dataset.swiping === '1') {
+  // 如果刚刚发生过滑动（pointer handler 标记），不要触发"点图返回"
+  if (swipeContainer.value?.dataset.swiping === '1') {
     return
   }
   handleReturnToGallery()
 }
 
 onMounted(() => {
-  // 绑定更丝滑的滑动手势（移动端/桌面端都启用）
-  stopSwipe = initSwipe(imageEl as unknown as Ref<HTMLElement | undefined>)
+  // 绑定滑动手势到外层容器（不会因路由切换被销毁重建）
+  stopSwipe = initSwipe(swipeContainer as Ref<HTMLElement | undefined>)
 })
 
 onUnmounted(() => {
@@ -499,7 +500,10 @@ onUnmounted(() => {
             </div>
 
             <!-- image -->
-            <div class="relative flex items-center justify-center xl:m-16">
+            <div
+              ref="swipeContainer"
+              class="relative flex items-center justify-center xl:m-16"
+            >
               <div ref="imageContainer">
                 <div class="group">
                   <div
