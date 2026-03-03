@@ -45,16 +45,16 @@ router.afterEach(async (to, _) => {
 </script>
 
 <template>
-  <div class="bg-transparent md:bg-black/10 md:backdrop-blur-md top-0 h-[68px] absolute overflow-hidden w-screen">
+  <div class="thumbnail-bar bg-gradient-to-b from-black/60 via-black/30 to-transparent md:from-black/40 md:via-black/20 md:to-transparent backdrop-blur-sm top-0 h-[72px] absolute overflow-hidden w-screen z-[9999]">
     <ul
       v-if="images && images.length"
       ref="thumbnails"
-      class="fixed top-2 left-0 right-0 mr-8 whitespace-nowrap overflow-x-scroll"
+      class="fixed top-2.5 left-0 right-0 mr-8 whitespace-nowrap overflow-x-scroll scrollbar-hide"
     >
       <ImageThumbnail
         v-for="(thumbnail, index) in images"
         :key="index"
-        class="transform-gpu transition-all duration-500 mx-4"
+        class="transform-gpu transition-all duration-500 ease-out mx-3"
         :thumbnail="thumbnail"
         :style="{ transform: `translateX(${x}px) translateZ(0)` }"
       />

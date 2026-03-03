@@ -324,7 +324,7 @@ onUnmounted(() => {
   <div>
     <section
       v-if="images"
-      class="relative h-screen gap-[22px] p-4"
+      class="relative min-h-screen gap-[22px] p-4"
     >
       <div
         class="w-full"
@@ -347,7 +347,7 @@ onUnmounted(() => {
               @click="() => { recordGalleryEntry(String(image.id)); active = image.id }"
             >
               <div
-                class="w-full min-h-[100px] h-auto md:h-auto max-h-[430px] rounded-md overflow-hidden"
+                class="w-full min-h-[100px] h-auto md:h-auto max-h-[430px] rounded-lg overflow-hidden gallery-card"
               >
                 <img
                   v-if="image && image.url"
@@ -357,34 +357,36 @@ onUnmounted(() => {
                   :alt="`Image ${image.id}`"
                   loading="lazy"
                   :class="{ imageEl: image.id === active }"
-                  class="w-full h-auto md:h-auto transition-all duration-200 border-image brightness-100 md:brightness-[.8] md:hover:brightness-100 will-change-[filter] object-contain md:object-cover"
+                  class="w-full h-auto md:h-auto transition-all duration-300 ease-out border-image brightness-100 md:brightness-[.85] md:hover:brightness-105 md:hover:scale-[1.02] will-change-[filter,transform] object-contain md:object-cover"
                   @load="() => loadAndCacheImage(image)"
                 >
                 <div
                   v-else
-                  class="h-full w-full bg-gray-800 flex items-center justify-center"
+                  class="h-full w-full bg-white/[0.03] flex items-center justify-center"
                 >
-                  <USkeleton class="h-full w-full" />
+                  <div class="flex flex-col items-center gap-2">
+                    <div class="w-6 h-6 rounded-full border border-white/10 border-t-white/40 animate-spin" />
+                  </div>
                 </div>
               </div>
             </NuxtLink>
 
             <button
               type="button"
-              class="absolute bottom-3 right-3 z-10 rounded-full bg-black/50 backdrop-blur px-2 py-2 hover:bg-black/70 transition flex items-center gap-1"
+              class="gallery-good-btn absolute bottom-3 right-3 z-10 rounded-full bg-black/40 backdrop-blur-sm border border-white/10 px-2.5 py-2 hover:bg-black/60 hover:border-white/20 transition-all duration-200 flex items-center gap-1.5"
               :class="[
-                goodLoadingKeys.has(image.key) ? 'opacity-70 cursor-not-allowed' : 'opacity-100',
-                goodBumpKeys.has(image.key) ? 'scale-125' : 'scale-100',
-                'transition-transform duration-150 ease-out'
+                goodLoadingKeys.has(image.key) ? 'opacity-50 cursor-not-allowed' : 'opacity-0 group-hover:opacity-100 md:opacity-0',
+                goodBumpKeys.has(image.key) ? 'scale-110' : 'scale-100',
+                getGoodText(image) ? '!opacity-100' : ''
               ]"
               :disabled="goodLoadingKeys.has(image.key)"
               aria-label="Good"
               @click.stop.prevent="() => incrementGood(image)"
             >
-              <img src="/good.svg" alt="good" class="w-5 h-5">
+              <img src="/good.svg" alt="good" class="w-4 h-4">
               <span
                 v-if="getGoodText(image)"
-                class="text-xs text-white tabular-nums"
+                class="text-[11px] text-white/80 tabular-nums font-medium"
               >
                 {{ getGoodText(image) }}
               </span>
@@ -402,15 +404,15 @@ onUnmounted(() => {
                 :key="item"
                 class="relative w-full masonry-item"
               >
-                <div class="min-h-[100px] h-auto md:h-auto max-h-[430px] w-full rounded-md bg-gray-800 overflow-hidden">
+                <div class="min-h-[100px] h-auto md:h-auto max-h-[430px] w-full rounded-lg bg-white/[0.03] overflow-hidden skeleton-shimmer">
                   <USkeleton class="min-h-[100px] h-full w-full" />
                 </div>
               </li>
             </ul>
           </div>
 
-          <p v-else-if="imagesLoaded" class="text-gray-400">
-            No images available
+          <p v-else-if="imagesLoaded" class="text-white/40 text-base font-light tracking-wide">
+            暂无图片
           </p>
 
           <div v-else class="w-full">
@@ -420,7 +422,7 @@ onUnmounted(() => {
                 :key="item"
                 class="relative w-full masonry-item"
               >
-                <div class="min-h-[100px] h-auto md:h-auto max-h-[430px] w-full rounded-md bg-gray-800 overflow-hidden">
+                <div class="min-h-[100px] h-auto md:h-auto max-h-[430px] w-full rounded-lg bg-white/[0.03] overflow-hidden skeleton-shimmer">
                   <USkeleton class="min-h-[100px] h-full w-full" />
                 </div>
               </li>
@@ -429,17 +431,51 @@ onUnmounted(() => {
         </div>
       </div>
     </section>
-    <div v-else class="flex items-center space-x-4 z-10">
-      <USkeleton class="h-12 w-12 bg-white-500" :ui="{ rounded: 'rounded-full' }" />
-      <div class="space-y-2">
-        <USkeleton class="h-4 w-[250px] bg-white-500" />
-        <USkeleton class="h-4 w-[200px] bg-white-500" />
+    <div v-else class="min-h-screen flex items-center justify-center">
+      <div class="flex flex-col items-center gap-3">
+        <div class="w-10 h-10 rounded-full border border-white/10 border-t-white/40 animate-spin" />
+        <p class="text-white/40 text-sm tracking-wide">加载中...</p>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped lang="postcss">
+/* 画廊卡片渐入 */
+.gallery-card {
+  position: relative;
+}
+
+/* 点赞按钮移动端始终可见 */
+@media (max-width: 767px) {
+  .gallery-good-btn {
+    opacity: 1 !important;
+  }
+}
+
+/* 骨架屏微光 */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.03) 50%,
+    transparent 100%
+  );
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 @media (min-width: 768px) {
   .imageEl {
     view-transition-name: vtn-image;
@@ -454,7 +490,7 @@ onUnmounted(() => {
   }
 
   .container-image {
-    background-color: rgba(255, 255, 255, 0.1)
+    background-color: rgba(255, 255, 255, 0.05)
   }
 
   .container-image:hover {
@@ -462,8 +498,8 @@ onUnmounted(() => {
   }
 
   .border-image {
-    border-width: 1.15px;
-    border-color: rgba(255, 255, 255, 0.1)
+    border-width: 1px;
+    border-color: rgba(255, 255, 255, 0.06)
   }
 }
 

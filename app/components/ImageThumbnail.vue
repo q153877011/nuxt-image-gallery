@@ -44,20 +44,25 @@ function isCurrentImage(imageId: string) {
     :class="{ 'z-50': isCurrentImage(thumbnail.id) }"
   >
     <NuxtLink :to="detailTo">
-      <img
-        v-if="thumbnailUrl"
-        width="83"
-        height="51"
-        :src="thumbnailUrl"
-        :alt="thumbnail.id"
-        class="object-cover rounded-md transition-all duration-500 hover:brightness-100 w-[83px] h-[51px]"
-        :class="isCurrentImage(thumbnail.id) ? 'active brightness-100' : 'opacity-75 brightness-50'"
-      >
       <div
-        v-else
-        class="w-[83px] h-[51px] bg-gray-800 rounded-md flex items-center justify-center"
+        class="relative rounded-md overflow-hidden transition-all duration-400 ease-out"
+        :class="isCurrentImage(thumbnail.id) ? 'ring-2 ring-white/60 shadow-lg shadow-white/10 scale-105' : 'ring-1 ring-white/5 hover:ring-white/20'"
       >
-        <USkeleton class="h-full w-full" />
+        <img
+          v-if="thumbnailUrl"
+          width="83"
+          height="51"
+          :src="thumbnailUrl"
+          :alt="thumbnail.id"
+          class="object-cover transition-all duration-400 ease-out w-[83px] h-[51px]"
+          :class="isCurrentImage(thumbnail.id) ? 'brightness-100' : 'opacity-60 brightness-50 hover:brightness-75 hover:opacity-90'"
+        >
+        <div
+          v-else
+          class="w-[83px] h-[51px] bg-white/5 rounded-md flex items-center justify-center"
+        >
+          <div class="w-4 h-4 rounded-full border border-white/10 border-t-white/40 animate-spin" />
+        </div>
       </div>
     </NuxtLink>
   </li>

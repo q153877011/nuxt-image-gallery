@@ -404,7 +404,24 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="image" class="relative min-h-screen">
+  <div v-if="image" class="detail-page relative min-h-screen">
+    <!-- 移动端关闭按钮 -->
+    <button
+      class="md:hidden fixed top-4 right-4 z-[100] w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all duration-200 active:scale-90 hover:bg-white/20"
+      aria-label="关闭"
+      @click="handleReturnToGallery"
+    >
+      <UIcon name="i-heroicons-x-mark" class="w-5 h-5 text-white/80" />
+    </button>
+
+    <!-- 移动端图片计数 -->
+    <div
+      v-if="images && images.length > 1"
+      class="md:hidden fixed top-5 left-4 z-[100] text-white/50 text-xs font-medium tracking-wider tabular-nums"
+    >
+      {{ currentIndex + 1 }} / {{ images.length }}
+    </div>
+
     <UContainer class="overflow-x-hidden relative flex items-center justify-center">
       <ImageFilters
         class="absolute md:mt-36 transition-transform duration-200"
@@ -417,7 +434,6 @@ onUnmounted(() => {
           :class="filter ? 'block opacity-100' : 'hidden opacity-0'"
         >
           <div class="flex flex-col gap-y-4">
-            <!-- filters list -->
             <div class="flex gap-x-4 justify-between items-center pb-4">
               <span class="text-white w-40">Fit</span>
               <USelectMenu
@@ -487,40 +503,32 @@ onUnmounted(() => {
           class="transition-all duration-200 overflow-hidden pt-8 flex items-center justify-center w-full h-screen relative"
         >
           <div class="flex items-center justify-center md:justify-between gap-x-4 w-full">
-            <!-- previous image if not the first image -->
+            <!-- PC 端上一张 -->
             <UTooltip
               v-if="!isFirstImg"
               text="Previous"
               :shortcuts="['←']"
             >
-                <UButton
-                  variant="ghost"
-                  color="gray"
-                  :to="prevTo"
-                  size="lg"
-                  icon="i-heroicons-chevron-left"
-                  class="hidden md:flex ml-4"
-                  aria-label="Go to previous image"
-                  @click="active = image.id"
-                />
-
+              <UButton
+                variant="ghost"
+                color="gray"
+                :to="prevTo"
+                size="lg"
+                icon="i-heroicons-chevron-left"
+                class="hidden md:flex ml-4 nav-btn"
+                aria-label="Go to previous image"
+                @click="active = image.id"
+              />
             </UTooltip>
 
-            <div
-              v-else
-              class="flex group"
-            >
-              <!-- back to gallery if first movie -->
-              <UTooltip
-                text="Back"
-                :shortcuts="['Esc']"
-              >
+            <div v-else class="flex group">
+              <UTooltip text="Back" :shortcuts="['Esc']">
                 <UButton
                   :to="galleryTo"
                   size="xl"
                   color="gray"
                   variant="ghost"
-                  class="back hidden md:flex ml-4 transition-colors duration-200"
+                  class="back hidden md:flex ml-4 nav-btn transition-colors duration-200"
                   aria-label="Back"
                   @click="() => { active = image.id; recordGalleryReturn() }"
                 >
@@ -532,25 +540,26 @@ onUnmounted(() => {
               </UTooltip>
             </div>
 
-            <!-- image -->
+            <!-- 图片展示区 -->
             <div
               ref="swipeContainer"
-              class="relative flex items-center justify-center xl:m-16"
+              class="relative flex items-center justify-center xl:m-16 swipe-area"
             >
               <div ref="imageContainer">
                 <div class="group">
                   <div
                     v-if="image"
-                    class="relative w-full h-[60vh] flex items-center justify-center rounded overflow-hidden bg-transparent"
+                    class="relative w-full h-[70vh] md:h-[60vh] flex items-center justify-center rounded-lg overflow-hidden bg-transparent"
                   >
+                    <!-- 精致 loading 动画 -->
                     <div
                       v-if="!imageUrl || !imageLoaded"
-                      class="absolute inset-0 flex items-center justify-center pointer-events-none"
+                      class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none gap-3"
                     >
-                      <div
-                        class="w-8 h-8 rounded-full border-2 border-white/20 border-t-white/70 animate-spin"
-                        aria-label="Loading"
-                      />
+                      <div class="detail-loader" aria-label="Loading">
+                        <div class="detail-loader-ring" />
+                        <div class="detail-loader-ring detail-loader-ring-2" />
+                      </div>
                     </div>
 
                     <img
@@ -558,11 +567,11 @@ onUnmounted(() => {
                       ref="imageEl"
                       :src="imageUrl"
                       :alt="image.id"
-                      class="rounded object-contain transition-[transform,filter,opacity] duration-200 block will-change-transform select-none touch-pan-y"
+                      class="rounded-lg object-contain transition-[transform,filter,opacity] duration-300 ease-out block will-change-transform select-none touch-pan-y"
                       :class="[
                         { imageEl: isCurrentImage },
                         filter ? 'w-[80%] ml-[12px]' : 'w-full',
-                        imageLoaded ? 'opacity-100' : 'opacity-0'
+                        imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[0.97]'
                       ]"
                       :style="imageStyle"
                       draggable="false"
@@ -576,33 +585,31 @@ onUnmounted(() => {
                   <div
                     v-if="magnifier && imageUrl"
                     ref="magnifierEl"
-                    class="w-[100px] h-[100px] absolute border border-gray-200 pointer-events-none rounded-full block opacity-0 group-hover:opacity-100 transition-opacity duration-200 "
+                    class="w-[100px] h-[100px] absolute border border-white/20 pointer-events-none rounded-full block opacity-0 group-hover:opacity-100 transition-opacity duration-200 shadow-lg shadow-black/30"
                     :style="magnifierStyle"
                   />
                 </div>
               </div>
             </div>
 
-            <!-- next image (if not the last image) -->
+            <!-- PC 端下一张 -->
             <UTooltip
               v-if="!isLastImg"
               text="Next"
               :shortcuts="['→']"
             >
-                <UButton
-                  variant="ghost"
-                  color="gray"
-                  :to="nextTo"
-                  size="lg"
-                  icon="i-heroicons-chevron-right"
-                  class="hidden md:flex mr-4 rounded-full"
-                  aria-label="Go to next image"
-                  @click="active = image.id"
-                />
-
+              <UButton
+                variant="ghost"
+                color="gray"
+                :to="nextTo"
+                size="lg"
+                icon="i-heroicons-chevron-right"
+                class="hidden md:flex mr-4 rounded-full nav-btn"
+                aria-label="Go to next image"
+                @click="active = image.id"
+              />
             </UTooltip>
 
-            <!-- back to gallery if last image -->
             <UTooltip
               v-else
               text="Back"
@@ -614,7 +621,7 @@ onUnmounted(() => {
                   color="gray"
                   :to="galleryTo"
                   size="xl"
-                  class="back hidden md:flex mr-4 transition-colors duration-200"
+                  class="back hidden md:flex mr-4 nav-btn transition-colors duration-200"
                   aria-label="Back"
                   @click="() => { active = image.id; recordGalleryReturn() }"
                 >
@@ -632,13 +639,24 @@ onUnmounted(() => {
   </div>
   <div v-else class="min-h-screen flex items-center justify-center bg-black">
     <div class="text-center">
-      <div v-if="!images || images.length === 0" class="space-y-4">
-        <USkeleton class="h-12 w-12 bg-white-500 mx-auto" :ui="{ rounded: 'rounded-full' }" />
-        <p class="text-white">加载中...</p>
+      <div v-if="!images || images.length === 0" class="space-y-5">
+        <div class="detail-loader mx-auto">
+          <div class="detail-loader-ring" />
+          <div class="detail-loader-ring detail-loader-ring-2" />
+        </div>
+        <p class="text-white/60 text-sm tracking-wide">加载中...</p>
       </div>
-      <div v-else class="space-y-4">
-        <p class="text-white text-xl">图片未找到</p>
-        <UButton :to="galleryTo" color="primary" variant="outline">
+      <div v-else class="space-y-5">
+        <div class="w-16 h-16 mx-auto rounded-full bg-white/5 flex items-center justify-center">
+          <UIcon name="i-heroicons-photo" class="w-8 h-8 text-white/30" />
+        </div>
+        <p class="text-white/70 text-lg">图片未找到</p>
+        <UButton
+          :to="galleryTo"
+          color="neutral"
+          variant="outline"
+          class="border-white/20 text-white/70 hover:bg-white/10 hover:text-white transition-all duration-200"
+        >
           返回图库
         </UButton>
       </div>
@@ -647,6 +665,46 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="postcss">
+/* 详情页导航按钮 */
+.nav-btn {
+  opacity: 0.5;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+}
+.nav-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* 精致双环 loading */
+.detail-loader {
+  width: 36px;
+  height: 36px;
+  position: relative;
+}
+.detail-loader-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.7);
+  animation: detail-spin 1s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+}
+.detail-loader-ring-2 {
+  inset: 4px;
+  border-top-color: rgba(255, 255, 255, 0.3);
+  animation-direction: reverse;
+  animation-duration: 1.5s;
+}
+
+@keyframes detail-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 图片展示区域微妙光晕 */
+.swipe-area {
+  border-radius: 12px;
+}
+
 @media (min-width: 768px) {
   .imageEl {
     view-transition-name: vtn-image;
