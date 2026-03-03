@@ -131,15 +131,37 @@ const image: ComputedRef<ImageItem | null> = computed(() => {
 const imageUrl = ref<string | undefined>(undefined)
 const imageLoaded = ref(false)
 
-watch(imageUrl, async () => {
+// 用于追踪 imageUrl 变更序列，防止异步检查 complete 时覆盖新的状态
+let imageUrlSeq = 0
+
+watch(imageUrl, async (newUrl) => {
+  const seq = ++imageUrlSeq
   imageLoaded.value = false
-  if (!isClient) return
+  if (!isClient || !newUrl) return
 
   // 如果图片已经在缓存/预加载里，@load 可能会非常快触发甚至错过，
-  // 这里在下一帧检查一次 complete，避免出现"图片有了但一直 opacity-0"
-  await nextTick()
-  if (imageEl.value && imageEl.value.complete && imageEl.value.naturalWidth > 0) {
-    imageLoaded.value = true
+  // 这里用多帧重试检查 complete，避免出现"图片有了但一直 opacity-0"
+  // 最多重试 8 帧 (~130ms)，覆盖 v-if 渲染 + 缓存图片同步 load 的场景
+  for (let i = 0; i < 8; i++) {
+    await nextTick()
+    // 如果 imageUrl 又变了，放弃本次检查
+    if (seq !== imageUrlSeq) return
+    // 如果已经通过 @load 设置过了，就不用再检查
+    if (imageLoaded.value) return
+
+    if (imageEl.value && imageEl.value.complete && imageEl.value.naturalWidth > 0) {
+      imageLoaded.value = true
+      return
+    }
+  }
+
+  // 兜底：如果 5 秒后仍在 loading（同一个 url），强制显示（避免永远卡在 loading）
+  if (isClient) {
+    window.setTimeout(() => {
+      if (seq === imageUrlSeq && !imageLoaded.value) {
+        imageLoaded.value = true
+      }
+    }, 5000)
   }
 })
 
@@ -189,24 +211,33 @@ watch(image, async (newImage: ImageItem | null) => {
 
   if (!newImage) {
     imageUrl.value = undefined
-    imageLoaded.value = false
     return
   }
 
-  // 路由切换后先立刻清掉旧图 + 重置 transform，避免"弹回旧图等加载"
-  imageUrl.value = newImage.url || undefined
-  imageLoaded.value = false
-
-  // 如果已有 url，也主动预加载/解码一下，避免回滑时出现空白
-  if (imageUrl.value) {
-    preloadImageUrl(imageUrl.value)
-  }
+  // 路由切换后先立刻重置 transform，避免"弹回旧图等加载"
   if (isClient && swipeContainer.value) {
     swipeContainer.value.style.transition = 'none'
     swipeContainer.value.style.transform = 'translate3d(0px, 0, 0)'
   }
 
-  if (!newImage.url && newImage.key && isClient) {
+  if (newImage.url) {
+    // 已有 url → 直接切换（imageLoaded 由 watch(imageUrl) 管理）
+    // 如果和上一张 url 相同需要手动 触发 watch
+    const prevUrl = imageUrl.value
+    imageUrl.value = newImage.url
+    // 如果 url 没变化 watch(imageUrl) 不会触发，手动重置
+    if (prevUrl === newImage.url) {
+      imageLoaded.value = false
+      await nextTick()
+      if (token !== imageWatchToken) return
+      if (imageEl.value && imageEl.value.complete && imageEl.value.naturalWidth > 0) {
+        imageLoaded.value = true
+      }
+    }
+    // 主动预加载/解码，减少空白
+    preloadImageUrl(newImage.url)
+  }
+  else if (newImage.key && isClient) {
     // 没有预签名时：显示 skeleton，同时异步拿签名
     imageUrl.value = undefined
 
@@ -215,7 +246,6 @@ watch(image, async (newImage: ImageItem | null) => {
       if (token !== imageWatchToken) return
 
       imageUrl.value = signed
-      imageLoaded.value = false
 
       // 拿到签名后立刻开始预加载当前图，减少首帧空窗
       preloadImageUrl(signed)
@@ -232,6 +262,9 @@ watch(image, async (newImage: ImageItem | null) => {
     catch (error) {
       console.error(`Failed to sign image ${newImage.key}:`, error)
     }
+  }
+  else {
+    imageUrl.value = undefined
   }
 }, { immediate: true })
 
@@ -534,6 +567,7 @@ onUnmounted(() => {
                       :style="imageStyle"
                       draggable="false"
                       @load="imageLoaded = true"
+                      @error="imageLoaded = true"
                       @click="handleImageTap"
                       @mousemove="magnifier && imageContainer && imageEl && magnifierEl ? magnifierImage($event, imageContainer, imageEl, magnifierEl, zoomFactor) : () => {}"
                     >

@@ -50,7 +50,7 @@ export function useImageGallery () {
   })
 
   const navigateToGallery = () => {
-    router.push({ path: '/', query: galleryQuery.value })
+    router.replace({ path: '/', query: galleryQuery.value })
   }
 
   const navigateToImage = (index: number) => {
@@ -59,7 +59,7 @@ export function useImageGallery () {
     }
 
     const encodedSlug = encodeImageSlug(file.images.value[index]!.id)
-    router.push({ path: `/detail/${encodedSlug}`, query: galleryQuery.value })
+    router.replace({ path: `/detail/${encodedSlug}`, query: galleryQuery.value })
   }
 
   // 更丝滑的滑动：使用 Pointer Events + rAF 更新 transform，松手后再判断是否切换
