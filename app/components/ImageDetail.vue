@@ -389,6 +389,22 @@ function handleImageTap() {
   handleReturnToGallery()
 }
 
+function handleBackdropClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (!target) return
+
+  // 点击的是图片本身 → 走 handleImageTap（移动端滑动保护）
+  if (imageEl.value && imageEl.value.contains(target)) return
+  // 点击的是按钮 / 链接 / filter 面板内 → 不关闭
+  if (target.closest('button') || target.closest('a') || target.closest('[role="dialog"]')) return
+  // 点击的是 filter 面板区域
+  if (target.closest('.absolute.md\\:mt-36')) return
+  // 点击的是缩略图区域
+  if (target.closest('.scrollbar-hide')) return
+
+  handleReturnToGallery()
+}
+
 onMounted(() => {
   // 绑定滑动手势到外层容器（不会因路由切换被销毁重建）
   stopSwipe = initSwipe(swipeContainer as Ref<HTMLElement | undefined>)
@@ -404,7 +420,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="image" class="detail-page relative min-h-screen">
+  <div v-if="image" class="detail-page relative min-h-screen" @click="handleBackdropClick">
     <!-- 移动端关闭按钮 -->
     <button
       class="md:hidden fixed top-4 right-4 z-[100] w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center transition-all duration-200 active:scale-90 hover:bg-white/20"
@@ -500,7 +516,7 @@ onUnmounted(() => {
       <div class="h-full w-full max-w-7xl flex items-center justify-center relative mx-auto">
         <div
           :class="{ '-translate-x-[100px]': filter }"
-          class="transition-all duration-200 overflow-hidden pt-8 flex items-center justify-center w-full h-screen relative"
+          class="transition-all duration-200 pt-8 flex items-center justify-center w-full min-h-screen relative"
         >
           <div class="flex items-center justify-center md:justify-between gap-x-4 w-full">
             <!-- PC 端上一张 -->
@@ -543,13 +559,13 @@ onUnmounted(() => {
             <!-- 图片展示区 -->
             <div
               ref="swipeContainer"
-              class="relative flex items-center justify-center xl:m-16 swipe-area"
+              class="relative flex items-center justify-center swipe-area flex-1 min-w-0"
             >
               <div ref="imageContainer">
                 <div class="group">
                   <div
                     v-if="image"
-                    class="relative w-full h-[70vh] md:h-[60vh] flex items-center justify-center rounded-lg overflow-hidden bg-transparent"
+                    class="relative w-full flex items-center justify-center rounded-lg overflow-hidden bg-transparent"
                   >
                     <!-- 精致 loading 动画 -->
                     <div
@@ -567,10 +583,10 @@ onUnmounted(() => {
                       ref="imageEl"
                       :src="imageUrl"
                       :alt="image.id"
-                      class="rounded-lg object-contain transition-[transform,filter,opacity] duration-300 ease-out block will-change-transform select-none touch-pan-y"
+                      class="rounded-lg object-contain transition-[transform,filter,opacity] duration-300 ease-out block will-change-transform select-none touch-pan-y max-h-[82vh] max-w-full"
                       :class="[
                         { imageEl: isCurrentImage },
-                        filter ? 'w-[80%] ml-[12px]' : 'w-full',
+                        filter ? 'w-[80%] ml-[12px]' : '',
                         imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[0.97]'
                       ]"
                       :style="imageStyle"

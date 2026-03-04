@@ -4,6 +4,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return
   }
 
+  // 开发模式下跳过 gate 验证，方便本地调试
+  if (import.meta.dev) {
+    return
+  }
+
   // /gate 只是提示页：允许直接访问
   if (to.path === '/gate') {
     return

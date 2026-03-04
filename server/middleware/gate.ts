@@ -121,6 +121,11 @@ async function validateTokenAndGetUserId(rawToken: string): Promise<string | nul
 }
 
 export default defineEventHandler(async (event) => {
+  // 开发模式下跳过 gate 验证，方便本地调试
+  if (process.env.NODE_ENV !== 'production') {
+    return
+  }
+
   const url = getRequestURL(event)
   const path = url.pathname
 

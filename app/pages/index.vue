@@ -21,6 +21,7 @@ const imagesLoaded = useState<boolean>('imagesLoaded', () => false)
 const lastLoadedUserId = useState<string | null>('lastLoadedUserId', () => null)
 
 const route = useRoute()
+const isDev = import.meta.dev
 
 function getUserIdFromRoute(): string | null {
   const raw = route.query.user_id
@@ -108,6 +109,25 @@ async function loadImagesForUser(userId: string) {
   }
 }
 
+async function loadDevImages() {
+  imagesLoading.value = true
+  imagesLoaded.value = false
+  images.value = []
+
+  try {
+    const res = await $fetch<{ images: ImageItem[] }>('/api/dev-images', { method: 'GET' })
+    images.value = res.images || []
+    lastLoadedUserId.value = '__dev__'
+    imagesLoaded.value = true
+    imagesLoading.value = false
+  }
+  catch (err: unknown) {
+    console.error('Failed to load dev images:', err)
+    imagesLoaded.value = true
+    imagesLoading.value = false
+  }
+}
+
 const isIndexRoute = computed(() => route.path === '/')
 
 // 客户端进入首页后，根据 user_id 拉取
@@ -126,6 +146,13 @@ if (typeof window !== 'undefined') {
           return
         }
         loadImagesForUser(userId)
+      }
+      else if (isDev) {
+        // 开发模式下无 user_id 时，加载 /public/test/ 下的本地测试图片
+        if (lastLoadedUserId.value === '__dev__' && images.value && images.value.length > 0) {
+          return
+        }
+        loadDevImages()
       }
       else {
         images.value = []
